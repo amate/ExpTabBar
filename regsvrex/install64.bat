@@ -1,0 +1,1 @@
+regsvrex64 ExpTabBar.dll

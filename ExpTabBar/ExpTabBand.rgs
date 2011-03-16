@@ -1,0 +1,44 @@
+HKCR
+{
+	ExpTabBar.ExpTabBand.1 = s 'ExpTabBand Class'
+	{
+		CLSID = s '{6BE37F72-F2B9-4887-B819-5F086BE270CF}'
+	}
+	ExpTabBar.ExpTabBand = s 'ExpTabBand Class'
+	{
+		CurVer = s 'ExpTabBar.ExpTabBand.1'
+	}
+	NoRemove CLSID
+	{
+		ForceRemove {6BE37F72-F2B9-4887-B819-5F086BE270CF} = s 'ExpTabBar'
+		{
+			ProgID = s 'ExpTabBar.ExpTabBand.1'
+			VersionIndependentProgID = s 'ExpTabBar.ExpTabBand'
+			ForceRemove Programmable
+			InprocServer32 = s '%MODULE%'
+			{
+				val ThreadingModel = s 'Both'
+			}
+			TypeLib = s '{581F1B52-FD71-40A2-A256-0556E95FF4E7}'
+			Version = s '1.0'
+		}
+	}
+}
+
+
+HKLM
+{
+    NoRemove Software
+    {
+        NoRemove Microsoft
+        {
+            NoRemove 'Internet Explorer'
+            {
+                NoRemove Toolbar
+                {
+                    val '{6BE37F72-F2B9-4887-B819-5F086BE270CF}' = b '00'
+                }
+            }
+        }
+    }
+}
