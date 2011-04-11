@@ -1162,12 +1162,14 @@ void	CDonutTabBar::NavigateLockTab(int nIndex, bool bOn)
 
 void	CDonutTabBar::ExternalOpen(LPCTSTR strFullPath)
 {
+	Misc::SetForegroundWindow(GetTopLevelWindow());
 	LPITEMIDLIST pidl = CreateIDListFromFullPath(strFullPath);
 	
 	/* すでに開いてるタブがあればそっちに移動する */
 	int nIndex = _IDListIsEqualIndex(pidl);
 	if (nIndex != -1) {
 		if (nIndex != GetCurSel()) {
+			_SaveSelectedIndex(GetCurSel());
 			SetCurSel(nIndex);
 		}
 	} else {
@@ -1198,21 +1200,8 @@ void	CDonutTabBar::OnSetCurSel(int nIndex, int nOldIndex)
 		LPITEMIDLIST	pidl = GetItemIDList(nIndex);
 		if (IsExistFolderFromIDList(pidl)) {
 //			_ClearSearchText();
-			CListViewCtrl ListView;
-			HWND hWnd;
-			CComPtr<IShellView>	spShellView;
-			HRESULT hr = m_spShellBrowser->QueryActiveShellView(&spShellView);
-			if (SUCCEEDED(hr) && nOldIndex != -1) {
-				hr = spShellView->GetWindow(&hWnd);
-				if (SUCCEEDED(hr)) {
-					ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
-					if (ListView.m_hWnd != NULL) {
-						SetItemSelectedIndex(nOldIndex , ListView.GetTopIndex());
-					}
-				}
-			}
 
-
+			_SaveSelectedIndex(nOldIndex);
 			
 			m_spShellBrowser->BrowseObject(pidl, SBSP_NOAUTOSELECT | SBSP_CREATENOHISTORY);
 
@@ -1509,6 +1498,7 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 	int nIndex = _IDListIsEqualIndex(pidl);
 	if (nIndex != -1 && nIndex != nCurIndex) {
 		m_bNavigateLockOpening = true;
+		_SaveSelectedIndex(nCurIndex);
 		SetCurSel(nIndex);
 		if ((GetItemState(nCurIndex) & TCISTATE_NAVIGATELOCK) == 0) {
 			DeleteItem(nCurIndex);	// ナビゲートロックされていないので削除する
@@ -1532,6 +1522,7 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 			}
 		}
 		m_bNavigateLockOpening = true;
+		_SaveSelectedIndex(nCurIndex);
 		SetCurSel(OnTabCreate(pidl));
 		m_bNavigateLockOpening = false;
 		return;
@@ -1691,8 +1682,8 @@ void	CDonutTabBar::OnDestroy()
 	SetMsgHandled(FALSE);
 
 	if (m_bSaveAllTab) {
+		_SaveSelectedIndex(GetCurSel());
 		SaveAllTab();
-
 		SaveHistory();
 		std::size_t nCount = m_vecHistoryItem.size();
 		for (int i = 0; i < nCount; ++i) {
@@ -2020,7 +2011,8 @@ void	CDonutTabBar::OnOpenUpFolder(UINT uNotifyCode, int nID, CWindow wndCtl)
 		ILRemoveLastID(pidl);
 
 		m_nInsertIndex = nIndex + 1;
-		OnTabCreate(pidl, false, true);
+		int nNewIndex = OnTabCreate(pidl, false, true);
+		SetCurSel(nNewIndex);
 		m_nInsertIndex = -1;
 	}
 }
@@ -2057,8 +2049,23 @@ LRESULT CDonutTabBar::OnTooltipGetDispInfo(int idCtrl, LPNMHDR pnmh, BOOL& bHand
 	return 0;
 }
 
-
-
+/// フォルダの表示位置を保存する
+void CDonutTabBar::_SaveSelectedIndex(int nIndex)
+{
+	CListViewCtrl ListView;
+	HWND hWnd;
+	CComPtr<IShellView>	spShellView;
+	HRESULT hr = m_spShellBrowser->QueryActiveShellView(&spShellView);
+	if (SUCCEEDED(hr) && nIndex != -1) {
+		hr = spShellView->GetWindow(&hWnd);
+		if (SUCCEEDED(hr)) {
+			ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
+			if (ListView.m_hWnd != NULL) {
+				SetItemSelectedIndex(nIndex , ListView.GetTopIndex());
+			}
+		}
+	}
+}
 
 
 

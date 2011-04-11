@@ -709,6 +709,7 @@ int		CTabCtrlImpl::InsertItem(int nIndex, const CTabItem &item)
 		TCTRACE( _T(" ç≈å„Ç…í«â¡Ç≥ÇÍÇ‹ÇµÇΩ\n") );
 	} else {
 		m_items.insert(m_items.begin() + nIndex, item);
+		m_nActiveIndex = -1;
 	}
 
 	_UpdateLayout();

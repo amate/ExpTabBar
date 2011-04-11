@@ -50,4 +50,9 @@ const std::vector<char> urlstr_decode(const TCHAR* url);
 // 文字列が半角英数記号のみでかつ%が混ざっている場合、UTF8をエンコードしたものとしてデコードする
 const CString urlstr_decodeWhenASC(const CString& str);
 
+
+/// 引数で指定したウィンドウを最前面表示する
+void	SetForegroundWindow(HWND hWnd);
+
+
 }	// namespace Misc

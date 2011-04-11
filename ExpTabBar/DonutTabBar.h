@@ -197,6 +197,8 @@ private:
 
 	void	_ClearSearchText();
 	
+	void	_SaveSelectedIndex(int nIndex);
+
 	// Data members
 	DWORD		m_dwExtendedStyle;
 	CMenu		m_menuPopup;

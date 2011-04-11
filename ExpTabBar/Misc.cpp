@@ -286,4 +286,25 @@ const CString urlstr_decodeWhenASC(const CString& str)
 	return str;
 }
 
+/// 引数で指定したウィンドウを最前面表示する
+void SetForegroundWindow(HWND hWnd)
+{
+	// 最前面プロセスのスレッドIDを取得する 
+	int foregroundID = ::GetWindowThreadProcessId( ::GetForegroundWindow(), NULL); 
+	// 最前面アプリケーションの入力処理機構に接続する 
+	AttachThreadInput( ::GetCurrentThreadId(), foregroundID, TRUE); 
+	// 最前面ウィンドウを変更する 
+	::SetForegroundWindow(hWnd);
+
+	// 接続を解除する
+	AttachThreadInput( ::GetCurrentThreadId(), foregroundID, FALSE);
+#if 0	//\\+
+	::SetWindowPos(hWnd, HWND_TOPMOST  , 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSENDCHANGING | SWP_NOSIZE);
+	::SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSENDCHANGING | SWP_NOSIZE);
+	::SetForegroundWindow(hWnd);						//ウインドウにフォーカスを移す
+#endif
+}
+
+
+
 }	// namespace Misc
