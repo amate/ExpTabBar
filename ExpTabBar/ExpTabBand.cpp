@@ -1,67 +1,62 @@
 // ExpTabBand.cpp : CExpTabBand の実装
 
 #include "stdafx.h"
-
 #include "ExpTabBand.h"
+#include <UIAutomation.h>
+#include <boost/lexical_cast.hpp>
+#include "ShellWrap.h"
+
 
 
 // コンストラクタ/デストラクタ
-CExpTabBand::CExpTabBand()
-	: m_hWndParent(NULL)
-{
-}
+CExpTabBand::CExpTabBand() : m_bNavigateCompleted(false), m_wndShellView(this, 1)
+{	}
 
 CExpTabBand::~CExpTabBand()
 {
-	m_pSink->DispEventUnadvise(m_spWebBrowser2);
+	DispEventUnadvise(m_spWebBrowser2);
 }
 
 
 // IDeskBand
 STDMETHODIMP CExpTabBand::GetBandInfo(DWORD /* dwBandID */, DWORD /* dwViewMode */, DESKBANDINFO* pdbi)
 {
-    if (pdbi)
-    {
+    if (pdbi) {
         //ツールバーの最小サイズ
-        if (pdbi->dwMask & DBIM_MINSIZE)
-        {
-            pdbi->ptMinSize.x = 100;
+        if (pdbi->dwMask & DBIM_MINSIZE) {
+            pdbi->ptMinSize.x = -1;
             pdbi->ptMinSize.y = 24;
         }
         //ツールバーの最大サイズ
-        if (pdbi->dwMask & DBIM_MAXSIZE)
-        {
+        if (pdbi->dwMask & DBIM_MAXSIZE) {
             pdbi->ptMaxSize.x = -1;
             pdbi->ptMaxSize.y = -1;
         }
         // ツールバーとビューとの間をドラッグしたときどれぐらいの間隔ずつ空けるか
 		// dwModeFlags に DBIMF_VARIABLEHEIGHT が設定されていないと無視される
-        if (pdbi->dwMask & DBIM_INTEGRAL)
-        {
+        if (pdbi->dwMask & DBIM_INTEGRAL) {
             pdbi->ptIntegral.x = -1;
             pdbi->ptIntegral.y = -1;
         }
 
-        if (pdbi->dwMask & DBIM_ACTUAL)
-        {
+		// 理想
+        if (pdbi->dwMask & DBIM_ACTUAL) {
             pdbi->ptActual.x = -1;
             pdbi->ptActual.y = -1;
         }
-        if (pdbi->dwMask & DBIM_TITLE)
-        {
-            //ツールバー左側に表示されるタイトル文字列
+
+		//ツールバー左側に表示されるタイトル文字列
+        if (pdbi->dwMask & DBIM_TITLE) {
 			//wcscpy_s(pdbi->wszTitle, _T("ExpTabBar"));
         }
-        if( pdbi->dwMask & DBIM_BKCOLOR )
-        {
+
+        if( pdbi->dwMask & DBIM_BKCOLOR ) {
             //こう書いておけば、デフォルトの背景色になってくれるらしい
             pdbi->dwMask &= ~DBIM_BKCOLOR;
         }
-        if (pdbi->dwMask & DBIM_MODEFLAGS)
-        {
-            pdbi->dwModeFlags = DBIMF_NORMAL | DBIMF_USECHEVRON |
-                // バーを表示する際に、必ず次の行にしてくれる指定
-                DBIMF_BREAK;
+
+        if (pdbi->dwMask & DBIM_MODEFLAGS) {
+            pdbi->dwModeFlags = DBIMF_NORMAL | DBIMF_BREAK;	// バーを表示する際に、必ず次の行にしてくれる指定
         }
     }
     return S_OK;
@@ -71,13 +66,12 @@ STDMETHODIMP CExpTabBand::GetBandInfo(DWORD /* dwBandID */, DWORD /* dwViewMode 
 // IOleWindow
 STDMETHODIMP CExpTabBand::GetWindow(HWND* phwnd)
 {
-	HRESULT hr = S_OK;
 	if (NULL == phwnd) {
-		hr = E_INVALIDARG;
+		return E_INVALIDARG;
 	} else {
-		*phwnd = m_wndReflection.GetTabBar().m_hWnd;
+		*phwnd = m_wndTabBar.m_hWnd;
+		return S_OK;
 	}
-	return hr;
 }
 
 STDMETHODIMP CExpTabBand::ContextSensitiveHelp(BOOL /* fEnterMode */)
@@ -91,7 +85,7 @@ STDMETHODIMP CExpTabBand::ShowDW(BOOL fShow)
 {
     //ツールバーのShowWindowを実行する
     //まだツールバーを作ってないので、何もしない
-
+	ATLTRACE(_T("ShowDW() : %s\n"), fShow ? _T("true") : _T("false"));
     return S_OK;
 }
 
@@ -99,7 +93,7 @@ STDMETHODIMP CExpTabBand::CloseDW(unsigned long /* dwReserved */)
 {
     //CLOSE時の動作。ツールバーを非表示にする
     ShowDW(FALSE);
-
+	ATLTRACE(_T("CloseDW()\n"));
     return S_OK;
 }
 
@@ -116,49 +110,46 @@ STDMETHODIMP CExpTabBand::ResizeBorderDW(const RECT* /* prcBorder */, IUnknown* 
 STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 {
 	HRESULT hr;
-	// punkSiteがNULLでないなら、新しいsiteが設定されている
-	if(punkSite)
-	{
+	if (punkSite) {
 		//Get the parent window.
 		CComQIPtr<IOleWindow> pOleWindow(punkSite);
 		ATLASSERT(pOleWindow);
 
-		pOleWindow->GetWindow(&m_hWndParent);
-
-		if(m_hWndParent == NULL) {
-			ATLASSERT(0);
+		HWND	hWndParent;
+		pOleWindow->GetWindow(&hWndParent);
+		if (hWndParent == NULL) {
+			ATLASSERT(FALSE);
 			return E_FAIL;
 		}
 		
-		// IServiceProviderの取得
 		CComQIPtr<IServiceProvider> pSP(punkSite);
 		ATLASSERT(pSP);
-
 		hr = pSP->QueryService(IID_IWebBrowserApp, IID_IWebBrowser2, (LPVOID*)&m_spWebBrowser2);
 		ATLASSERT(m_spWebBrowser2);
+		if (SUCCEEDED(hr)) {
+			hr = DispEventAdvise(m_spWebBrowser2);
+			if (FAILED(hr)) {
+				ATLASSERT(FALSE);
+				return E_FAIL;
+			}
+		}
 
-		hr = CComObject<CWebBrowserEvents>::CreateInstance(&m_pSink);
-		if (FAILED(hr)) {
+		pSP->QueryService(SID_SShellBrowser, &m_spShellBrowser);
+		ATLASSERT(m_spShellBrowser);
+		if (m_spShellBrowser == nullptr) {
 			ATLASSERT(FALSE);
 			return E_FAIL;
 		}
 
-		hr = m_pSink->DispEventAdvise(m_spWebBrowser2);
-		if (FAILED(hr)) {
+
+		m_wndTabBar.Initialize(punkSite);
+
+		/* タブバー作成 */
+		m_wndTabBar.Create(hWndParent);
+		if (m_wndTabBar.IsWindow() == FALSE) {
 			ATLASSERT(FALSE);
 			return E_FAIL;
 		}
-		m_pSink->SetTabBarWindow(&m_wndReflection.GetTabBar());
-
-
-		m_wndReflection.GetTabBar().Initialize(punkSite);
-
-		if (RegisterAndCreateWindow() == FALSE) {
-			ATLASSERT(FALSE);
-			return E_FAIL;
-		}
-		
-		// NOTE: CreateToolWindow call should be last, it relies on m_pIE 
 	}
 
 	return S_OK;
@@ -170,15 +161,148 @@ STDMETHODIMP CExpTabBand::GetSite(REFIID riid, LPVOID *ppvReturn)
 }
 
 
-// Implementation
-BOOL	CExpTabBand::RegisterAndCreateWindow()
+// Event sink
+
+void CExpTabBand::OnNavigateComplete2(IDispatch* pDisp,VARIANT* URL)
 {
-	RECT rect;
-	::GetClientRect(m_hWndParent, &rect);
-	m_wndReflection.Create(m_hWndParent, rect, NULL, WS_CHILD);
-	// The toolbar is the window that the host will be using so it is the window that is important.
-	return m_wndReflection.GetTabBar().IsWindow();
+	m_bNavigateCompleted = true;
+		
+	CString strURL(*URL);
+	ATLTRACE(_T(" URL : %s\n"), strURL);
+	m_wndTabBar.NavigateComplete2(strURL);
 }
+
+void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
+{
+	if (m_bNavigateCompleted == true) {
+		m_wndTabBar.DocumentComplete();
+		m_bNavigateCompleted = false;
+
+		if (m_wndShellView.m_hWnd)
+			m_wndShellView.UnsubclassWindow();
+
+		HWND hWnd;
+		CComPtr<IShellView>	spShellView;
+		HRESULT hr = m_spShellBrowser->QueryActiveShellView(&spShellView);
+		if (SUCCEEDED(hr)) {
+			hr = spShellView->GetWindow(&hWnd);
+			if (SUCCEEDED(hr)) {
+				m_wndShellView.SubclassWindow(hWnd);
+				m_ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
+			}
+		}
+	}
+}
+
+
+void CExpTabBand::OnTitleChange(BSTR title)
+{
+	m_wndTabBar.RefreshTab(title);
+}
+
+
+// Message map
+
+/// 選択されているアイテムが変わった
+LRESULT CExpTabBand::OnListViewItemChanged(LPNMHDR pnmh)
+{
+	m_wndShellView.DefWindowProc();
+
+	LPNMLISTVIEW	pnmlv = (LPNMLISTVIEW)pnmh;
+	if (pnmlv->iItem == -1)
+		return 0;
+	
+	/* アイコン部分が再描写されないバグに対処 */
+	RECT rcItem;
+	m_ListView.GetItemRect(pnmlv->iItem, &rcItem, LVIR_ICON);
+	m_ListView.InvalidateRect(&rcItem);
+	ATLTRACE(_T("OnListViewItemChanged() : %d\n"), pnmlv->iItem);
+	return 0;
+}
+
+/// フォルダーをミドルクリックで新しいタブで開く
+void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
+{
+	if (message == WM_MBUTTONDOWN) {
+		int nIndex = -1;
+		if (m_ListView.m_hWnd) {
+			POINT pt;
+			::GetCursorPos(&pt);
+			m_ListView.ScreenToClient(&pt);
+			UINT Flags;
+			nIndex = m_ListView.HitTest(pt, &Flags);
+		} else {
+			HRESULT	hr;
+			CComPtr<IUIAutomation>	spUIAutomation;
+			hr = CoCreateInstance(__uuidof(CUIAutomation), NULL, CLSCTX_INPROC_SERVER, __uuidof(IUIAutomation), (void**)&spUIAutomation);
+			ATLASSERT(spUIAutomation);
+
+			POINT pt;
+			::GetCursorPos(&pt);
+			CComPtr<IUIAutomationElement>	spPointedElement;
+			hr = spUIAutomation->ElementFromPoint(pt, &spPointedElement);
+			if (FAILED(hr))
+				return ;
+			
+			CComPtr<IUIAutomationElement>	spItemUIElement;	
+
+			CComBSTR	strPointedClassName;
+			spPointedElement->get_CurrentClassName(&strPointedClassName);
+			if (strPointedClassName == nullptr || strPointedClassName != L"UIItem") {
+				CComPtr<IUIAutomationTreeWalker>	spWalker;
+				spUIAutomation->get_ControlViewWalker(&spWalker);
+				if (spWalker == nullptr)
+					return ;
+				
+				spWalker->GetParentElement(spPointedElement, &spItemUIElement);
+				if (spItemUIElement == nullptr)
+					return ;
+				CComBSTR	strClassName;
+				spItemUIElement->get_CurrentClassName(&strClassName);
+				if (strClassName == nullptr || strClassName != L"UIItem")
+					return;
+			} else 
+				spItemUIElement = spPointedElement;
+
+			CComBSTR	strID;
+			spItemUIElement->get_CurrentAutomationId(&strID);
+			if (strID)
+				nIndex = boost::lexical_cast<int>((LPCTSTR)CString(strID));
+		}
+
+		if (nIndex == -1)
+			return ;
+
+		CComPtr<IShellView>	spShellView;
+		HRESULT hr = m_spShellBrowser->QueryActiveShellView(&spShellView);
+		CComQIPtr<IFolderView>	spFolderView = spShellView;
+		if (spFolderView == nullptr)
+			return ;
+
+		LPITEMIDLIST pidlChild = nullptr;
+		spFolderView->Item(nIndex, &pidlChild);
+		if (pidlChild == nullptr)
+			return ;
+
+		LPITEMIDLIST pidlFolder = ShellWrap::GetCurIDList(m_spShellBrowser);
+		LPITEMIDLIST pidlSelectedItem = ::ILCombine(pidlFolder, pidlChild);
+		CString strSelectedPath = GetFullPathFromIDList(pidlSelectedItem);
+		if (::PathIsDirectory(strSelectedPath)) {
+			m_wndTabBar.OnTabCreate(pidlSelectedItem, false, false, true);
+		} else {
+			::ILFree(pidlSelectedItem);
+		}
+
+		::ILFree(pidlFolder);
+		::ILFree(pidlChild);
+	}
+}
+
+
+
+
+
+
 
 
 

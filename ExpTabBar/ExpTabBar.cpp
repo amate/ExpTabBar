@@ -195,13 +195,13 @@ void	UnInstallRegKey()
 // Used to determine whether the DLL can be unloaded by OLE.
 STDAPI DllCanUnloadNow(void)
 {
-		return _AtlModule.DllCanUnloadNow();
+	return _AtlModule.DllCanUnloadNow();
 }
 
 // Returns a class factory to create an object of the requested type.
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv)
 {
-		return _AtlModule.DllGetClassObject(rclsid, riid, ppv);
+	return _AtlModule.DllGetClassObject(rclsid, riid, ppv);
 }
 
 // DllRegisterServer - Adds entries to the system registry.
@@ -211,7 +211,7 @@ STDAPI DllRegisterServer(void)
 
 	// オブジェクト、タイプ ライブラリおよびタイプ ライブラリ内のすべてのインターフェイスを登録します
 	HRESULT hr = _AtlModule.DllRegisterServer();
-		return hr;
+	return hr;
 }
 
 // DllUnregisterServer - Removes entries from the system registry.
@@ -220,7 +220,7 @@ STDAPI DllUnregisterServer(void)
 	UnInstallRegKey();
 
 	HRESULT hr = _AtlModule.DllUnregisterServer();
-		return hr;
+	return hr;
 }
 
 // DllInstall - Adds/Removes entries to the system registry per user per machine.

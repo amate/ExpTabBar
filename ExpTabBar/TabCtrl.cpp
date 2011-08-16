@@ -4,6 +4,7 @@
 #include "TabCtrl.h"
 //#include "TabBarWindow.h"
 #include "Misc.h"
+#include "ExpTabBarOption.h"
 
 
 namespace MTL {
@@ -164,9 +165,9 @@ void	CTabSkin::_DrawText(CDCHandle dc, CPoint ptOffset, const CTabItem& item, bo
 	rcBtn.DeflateRect(2, 0);
 
 	UINT	uFormat;
-	int		nWidth	= MtlComputeWidthOfText(item.m_strItem, dc.GetCurrentFont());
-
-	if ( 1 /*nWidth > rcBtn.Width()*/ ) {
+	//int		nWidth	= MtlComputeWidthOfText(item.m_strItem, dc.GetCurrentFont());
+	CString strTab = MtlCompactString(item.m_strItem, CTabBarConfig::s_nMaxTextLength);
+	if ( true /*nWidth > rcBtn.Width()*/ ) {
 		uFormat = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_LEFT | DT_END_ELLIPSIS;
 	} else {
 		uFormat = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_CENTER | DT_NOCLIP;
@@ -175,12 +176,12 @@ void	CTabSkin::_DrawText(CDCHandle dc, CPoint ptOffset, const CTabItem& item, bo
 	if ( !(item.m_fsState & TCISTATE_ENABLED) ) {
 		CRect		rcDisabled	= rcBtn + CPoint(1, 1);
 		COLORREF	clrOld2		= dc.SetTextColor(m_colDisableHi);
-		dc.DrawText(item.m_strItem, -1, rcDisabled, uFormat);
+		dc.DrawText(strTab/*item.m_strItem*/, -1, rcDisabled, uFormat);
 		dc.SetTextColor(clrOld2);
 	}
 
 	// É^Éuè„Ç…ï∂éöóÒÇèëÇ≠
-	dc.DrawText(item.m_strItem, -1, rcBtn, uFormat);
+	dc.DrawText(strTab/*item.m_strItem*/, -1, rcBtn, uFormat);
 	dc.SetTextColor(clrOld);
 }
 

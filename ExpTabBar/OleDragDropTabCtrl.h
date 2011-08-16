@@ -140,12 +140,8 @@ private:
 
 		int	cyGap = GetItemHeight();
 
-		int	i;
-		if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE) {
-			i = 0;
-		} else {
-			i = m_nFirstIndexOnSingleLine;
-		}
+		int	i = CTabBarConfig::s_bMultiLine ? 0 : m_nFirstIndexOnSingleLine;
+
 		int	cyOffset = -1;
 		for (; i < GetItemCount(); ++i) {
 			const CRect &rcItem = GetItem(i).m_rcItem;
@@ -164,8 +160,6 @@ private:
 						 rcItem.top	  + cyGap);
 
 			//	rcSep.InflateRect(nInset, 0);
-			// タブの幅固定で決め打ちにする (￥で囲まれた部分)
-			// |  タ￥ブ  |   ￥
 			rcSep.InflateRect(rcItem.Width() / 2, 0);
 
 			if (rcSep.PtInRect(point)) {
@@ -197,8 +191,8 @@ private:
 		int  cxGap			= (nInset == 0) ? (s_kcxGap * 2 + s_kcxSeparator) : nInset;
 		int  cyGap			= GetItemHeight();
 
-		bool bCheckLeftSide = (GetExtendedStyle() & TAB2_EX_MULTILINE)
-	|| ( m_nFirstIndexOnSingleLine == 0 && !(GetExtendedStyle() & TAB2_EX_MULTILINE) );
+		bool bCheckLeftSide = CTabBarConfig::s_bMultiLine
+							|| ( m_nFirstIndexOnSingleLine == 0 && !CTabBarConfig::s_bMultiLine );
 
 		if (bCheckLeftSide && m_items.size() > 0) {
 			int 		 nIndex = HitTest(point);
@@ -319,7 +313,7 @@ public:
 		if (nIndex != -1) {
 			// デフォルトではDown時に切り替え release10β4
 			// 以前はUp時に切り替えでDownはD&Dの前段階という仕様
-			if (GetTabCtrlExtendedStyle() & TAB2_EX_MOUSEDOWNSELECT) {
+			if (false/*GetTabCtrlExtendedStyle() & TAB2_EX_MOUSEDOWNSELECT*/) {
 				// タブを切り替える
 				SetCurSel(nIndex, true);
 				NMHDR nmhdr = { m_hWnd, GetDlgCtrlID(), TCN_SELCHANGE };

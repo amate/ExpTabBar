@@ -3,7 +3,6 @@
 
 #include "TabCtrl.h"
 
-
 //////////////////////////////////////////////////////
 // CTabCtrlImpl
 
@@ -31,12 +30,9 @@ public:
 	// attributes
 	int		GetItemCount() const { return (int) m_items.size(); }
 
-	DWORD	GetTabCtrlExtendedStyle() const { return m_dwTabCtrlExtendedStyle; }
-	void	SetTabCtrlExtendedStyle(DWORD style) { m_dwTabCtrlExtendedStyle = style; }
 	DWORD	GetTabStyle() const { return m_TabStyle; }
 	void	SetTabStyle(DWORD style) { m_TabStyle = style; }
 
-	CSize	GetItemSize() const { return m_sizeItem; }
 	void	SetItemSize(const CSize& size);
 
 	int		GetItemHeight() const;
@@ -146,6 +142,7 @@ protected:
 		s_kcyGap		= -2,	// タブの上下間の幅
 		s_kSideMargin	= 2,	// 左右の余白
 		s_kcxSeparator	= 2,
+		s_kcyTabIcon	= 4,	// タブとアイコンの上下の余白
 
 		s_kcxUpDown 	= 28,
 		s_kcyUpDown 	= 14,
@@ -162,9 +159,7 @@ protected:
 private:
 	bool					m_bLockRefreshBandInfo;
 
-	DWORD					m_dwTabCtrlExtendedStyle;
 	DWORD					m_TabStyle;
-	CSize					m_sizeItem;					// for fixed size
 
 	int						m_nHotIndex;				// Current hot index
 	int						m_nPressedIndex;			// Current capturing index

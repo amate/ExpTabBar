@@ -1,12 +1,17 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
+# Visual C++ Express 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExpTabBar", "ExpTabBar\ExpTabBar.vcxproj", "{7158FD40-539F-475E-909E-CB03CB0E0B3E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F} = {969AE102-6173-4EF7-854E-BD78D2B15B1F}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExpTabBarPS", "ExpTabBar\ExpTabBarPS.vcxproj", "{596591B2-1B2A-4589-AB71-91FE212FAE25}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7158FD40-539F-475E-909E-CB03CB0E0B3E} = {7158FD40-539F-475E-909E-CB03CB0E0B3E}
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "APIHookLib", "APIHook\APIHook.vcxproj", "{969AE102-6173-4EF7-854E-BD78D2B15B1F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,6 +33,13 @@ Global
 		{596591B2-1B2A-4589-AB71-91FE212FAE25}.Debug|X64.ActiveCfg = Debug|Win32
 		{596591B2-1B2A-4589-AB71-91FE212FAE25}.Release|Win32.ActiveCfg = Release|Win32
 		{596591B2-1B2A-4589-AB71-91FE212FAE25}.Release|X64.ActiveCfg = Release|X64
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Debug|Win32.ActiveCfg = Debug|Win32
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Debug|Win32.Build.0 = Debug|Win32
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Debug|X64.ActiveCfg = Debug|x64
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Debug|X64.Build.0 = Debug|x64
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Release|Win32.ActiveCfg = Release|Win32
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Release|Win32.Build.0 = Release|Win32
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Release|X64.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

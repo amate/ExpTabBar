@@ -2,18 +2,17 @@
 
 #include "stdafx.h"
 #include "TabCtrlImpl.h"
+#include "ExpTabBarOption.h"
 
 ////////////////////////////////////////////////////////////////////
 // CTabCtrlImpl
 
 CTabCtrlImpl::CTabCtrlImpl()
-	: /*m_dwTabCtrlExtendedStyle(TAB2_EX_DEFAULT_BITS)
-	, */m_nActiveIndex(-1)
+	: m_nActiveIndex(-1)
 	, m_nHotIndex(-1)
 	, m_nPressedIndex(-1)
 	, m_nFirstIndexOnSingleLine(0)
 	, m_bLockRefreshBandInfo(false)
-//	, m_sizeItem(110, 24)
 	, m_pTabSkin(NULL)
 {
 	m_imgs.Create(CXICON, CYICON, ILC_COLOR32 | ILC_MASK, 50, 254);
@@ -30,7 +29,7 @@ CTabCtrlImpl::CTabCtrlImpl()
 
 CTabCtrlImpl::~CTabCtrlImpl()
 {
-	if (m_imgs.m_hImageList != NULL && (GetTabCtrlExtendedStyle() & TAB2_EX_SHAREIMGLIST) == 0)
+	if (m_imgs.m_hImageList)
 		m_imgs.Destroy();		// イメージリストを破棄する
 
 	for (int i = 0; i < GetItemCount(); ++i) {
@@ -79,30 +78,31 @@ int		CTabCtrlImpl::_GetRequiredHeight()
 // タブの大きさを計算する
 CRect	CTabCtrlImpl::_MeasureItemRect(const CString &strText)
 {
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_FIXEDSIZE)
-		return CRect(0, 0, m_sizeItem.cx, m_sizeItem.cy);
+	if (CTabBarConfig::s_bUseFixedSize)
+		return CRect(0, 0, CTabBarConfig::s_FixedSize.cx, CTabBarConfig::s_FixedSize.cy);
 
+	CString strTab = MtlCompactString(strText, CTabBarConfig::s_nMaxTextLength);
 	// compute size of text - use DrawText with DT_CALCRECT
-	int 	cx	   = MtlComputeWidthOfText(strText, m_pTabSkin->GetFontHandle());
+	int cx = MtlComputeWidthOfText(strTab, m_pTabSkin->GetFontHandle());
 
-	int 	cxIcon = 0;
-	int		cyIcon = 0;
-
-	if (m_imgs.m_hImageList != NULL)
+	int cxIcon = 0;
+	int	cyIcon = 0;
+	if (m_imgs.m_hImageList) {
 		m_imgs.GetIconSize(cxIcon, cyIcon);
+		cyIcon += s_kcyTabIcon * 2;
+		cx += cxIcon;
+	}
 
-	int 	cy = m_pTabSkin->GetFontHeight();
-
+	int cy = m_pTabSkin->GetFontHeight();
 	if (cy < 0)
 		cy = -cy;
-
 	cy += 2 * s_kcyTextMargin;
 
 	// height of item is the bigger of these two
 	cy	= std::max(cy, cyIcon);
 
 	// width is width of text plus a bunch of stuff
-	cx += 2 * s_kcxTextMargin;	// L/R margin for readability
+	cx += s_kcxTextMargin * 2;	// L/R margin for readability
 
 	return CRect(0, 0, cx, cy);
 }
@@ -178,7 +178,7 @@ void	CTabCtrlImpl::_ShowOrHideUpDownCtrl(const CRect &rcClient)
 {
 	int	nCount = GetItemCount();
 
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE || nCount < 1) {
+	if (CTabBarConfig::s_bMultiLine || nCount < 1) {
 		m_wndDropBtn.ShowWindow(SW_HIDE);
 		m_wndUpDown.ShowWindow(SW_HIDE);
 		return;
@@ -204,15 +204,15 @@ void	CTabCtrlImpl::_ScrollOpposite(int nNewSel, bool bClicked)
 {
 	ATLASSERT( _IsValidIndex(nNewSel) );
 
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE)
+	if (CTabBarConfig::s_bMultiLine)
 		return;
 
 	if (GetItemCount() < 2)
 		return;
-
+#if 0
 	if ( !(GetTabCtrlExtendedStyle() & TAB2_EX_SCROLLOPPOSITE) )
 		return;
-
+#endif
 	if (m_wndUpDown.IsWindowVisible() == FALSE)
 		return;
 
@@ -242,8 +242,6 @@ void	CTabCtrlImpl::_ScrollOpposite(int nNewSel, bool bClicked)
 // タブバーが複数行になるときなどに呼ばれる
 void	CTabCtrlImpl::_RefreshBandInfo()
 {
-	ATLASSERT(GetTabCtrlExtendedStyle() & TAB2_EX_SUPPORTREBAR);
-
 	if (m_bLockRefreshBandInfo)
 		return;
 
@@ -307,8 +305,8 @@ void	CTabCtrlImpl::_UpdateSingleLineLayout(int nFirstIndex, bool bForce)
 		const CRect&	rcSrc	= item.m_rcItem;
 
 		// update the rect
-		if (GetTabCtrlExtendedStyle() & TAB2_EX_FIXEDSIZE) {
-			item.m_rcItem = CRect(cxOffset, 0, cxOffset + m_sizeItem.cx, m_sizeItem.cy);
+		if (CTabBarConfig::s_bUseFixedSize) {
+			item.m_rcItem = CRect(cxOffset, 0, cxOffset + CTabBarConfig::s_FixedSize.cx, CTabBarConfig::s_FixedSize.cy);
 		} else {
 			item.m_rcItem = _MeasureItemRect(m_items[i].m_strItem) + CPoint(cxOffset, 0);
 		}
@@ -333,16 +331,15 @@ void	CTabCtrlImpl::_UpdateMultiLineLayout(int nWidth)
 	int	cxOffset = 0;
 	int	cyOffset = 0;
 
-	for (int i = 0; i < GetItemCount(); ++i) {
+	for (int i = 0; i < GetItemCount(); ++i) {	// update the rect
 		CTabItem&	item	= GetItem(i);
 		const CRect	rcSrc	= item.m_rcItem;
 
-		// update the rect
-		if (GetTabCtrlExtendedStyle() & TAB2_EX_FIXEDSIZE) {	// 固定幅
-			if (cxOffset == 0) {
-				cxOffset = s_kSideMargin;
-			}
-			item.m_rcItem = CRect(cxOffset, cyOffset, cxOffset + m_sizeItem.cx, cyOffset + m_sizeItem.cy);
+		if (cxOffset == 0) 
+			cxOffset = s_kSideMargin;
+
+		if (CTabBarConfig::s_bUseFixedSize) {
+			item.m_rcItem = CRect(CPoint(cxOffset, cyOffset), CTabBarConfig::s_FixedSize);
 		} else {
 			item.m_rcItem = _MeasureItemRect(m_items[i].m_strItem) + CPoint(cxOffset, cyOffset);
 		}
@@ -352,8 +349,8 @@ void	CTabCtrlImpl::_UpdateMultiLineLayout(int nWidth)
 			cxOffset = s_kSideMargin;
 			cyOffset += GetItemHeight() + s_kcyGap;	// s_kcyGap分下に移動
 
-			if (GetTabCtrlExtendedStyle() & TAB2_EX_FIXEDSIZE) {
-				item.m_rcItem = CRect(cxOffset, cyOffset, cxOffset + m_sizeItem.cx, cyOffset + m_sizeItem.cy);
+			if (CTabBarConfig::s_bUseFixedSize) {
+				item.m_rcItem = CRect(CPoint(cxOffset, cyOffset), CTabBarConfig::s_FixedSize);
 			} else {
 				item.m_rcItem = _MeasureItemRect(m_items[i].m_strItem) + CPoint(cxOffset, cyOffset);
 			}
@@ -376,16 +373,14 @@ void	CTabCtrlImpl::_UpdateLayout()
 		m_arrSeparators.RemoveAll();
 		Invalidate();
 
-		if (GetTabCtrlExtendedStyle() & TAB2_EX_SUPPORTREBAR)
-			_RefreshBandInfo();
-
+		_RefreshBandInfo();
 		return;
 	}
 
 	CRect	rc;
 	GetClientRect(&rc);
 
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE) {
+	if (CTabBarConfig::s_bMultiLine) {
 		// タブの複数列表示
 		_UpdateMultiLineLayout( rc.Width() );
 	} else {
@@ -395,8 +390,7 @@ void	CTabCtrlImpl::_UpdateLayout()
 
 	_ShowOrHideUpDownCtrl(rc);
 
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_SUPPORTREBAR)
-		_RefreshBandInfo();
+	_RefreshBandInfo();
 
 	UpdateWindow();
 }
@@ -434,13 +428,11 @@ void	CTabCtrlImpl::ReloadSkinData()
 void	CTabCtrlImpl::OnTrackMouseMove(UINT nFlags, CPoint pt)
 {
 	int nIndex = HitTest(pt);
-
 	if ( _IsValidIndex(nIndex) ) {
 		// if other button made hot or first hot
 		if (m_nHotIndex == -1 || m_nHotIndex != nIndex) {
 			m_tip.Activate(FALSE);
 			m_tip.Activate(TRUE);
-	//		PostMessage( WM_MOUSEMOVE, (WPARAM) nFlags, MAKELPARAM(pt.x, pt.y) );// make sure
 
 			_HotItem(nIndex);
 		}
@@ -461,8 +453,7 @@ void	CTabCtrlImpl::DoPaint(CDCHandle dc)
 {
 	/* タブバーを透明にするため 背景をコピー */
 	HWND	hWnd = GetParent();
-	CPoint	pt(0, 0);
-
+	CPoint	pt;
 	MapWindowPoints(hWnd, &pt, 1);
 	pt = ::OffsetWindowOrgEx(dc, pt.x, pt.y, NULL);
 	LRESULT lResult = ::SendMessage(hWnd, WM_ERASEBKGND, (WPARAM)dc.m_hDC, 0L);
@@ -472,15 +463,10 @@ void	CTabCtrlImpl::DoPaint(CDCHandle dc)
 	CFontHandle	fontOld = dc.SelectFont(m_pTabSkin->GetFontHandle());
 	int			modeOld	= dc.SetBkMode(TRANSPARENT);
 
-	int	i;
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE)
-		i = 0;
-	else {
-		i = m_nFirstIndexOnSingleLine;
-	}
+	int	i = CTabBarConfig::s_bMultiLine ? 0 : m_nFirstIndexOnSingleLine;
 
 	int		nCurIndex = GetCurSel();
-	bool	bAnchorColor = (GetTabCtrlExtendedStyle() & TAB2_EX_ANCHORCOLOR) != 0;
+	bool	bAnchorColor = false;//(GetTabCtrlExtendedStyle() & TAB2_EX_ANCHORCOLOR) != 0;
 	for (; i < GetItemCount(); ++i) {
 			// 各タブを描写する
 			m_pTabSkin->Update(dc, m_imgs, GetItem(i), bAnchorColor);
@@ -497,23 +483,10 @@ void	CTabCtrlImpl::DoPaint(CDCHandle dc)
 	dc.SetBkMode(modeOld);
 }
 
-
-// タブの大きさを変更する
-void	CTabCtrlImpl::SetItemSize(const CSize& size)
-{
-	CSize	sizePrev = m_sizeItem;
-
-	m_sizeItem = size;
-
-	if (sizePrev != m_sizeItem && GetTabCtrlExtendedStyle() & TAB2_EX_FIXEDSIZE) {
-		_UpdateLayout();
-	}
-}
-
 int		CTabCtrlImpl::GetItemHeight() const
 {
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_FIXEDSIZE) {
-		return m_sizeItem.cy;
+	if (CTabBarConfig::s_bUseFixedSize) {
+		return CTabBarConfig::s_FixedSize.cy;
 	} else {
 		int	cxIcon = 0;
 		int	cyIcon = 0;
@@ -574,7 +547,7 @@ void	CTabCtrlImpl::GetCurMultiSelEx(CSimpleArray<int>& arrDest, int nIndex)
 
 bool	CTabCtrlImpl::CanScrollItem(bool bRight) const
 {
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE)
+	if (CTabBarConfig::s_bMultiLine)
 		return false;	// can't
 	if (bRight) {
 		return	m_nFirstIndexOnSingleLine + 1 < GetItemCount();
@@ -679,12 +652,7 @@ int		CTabCtrlImpl::HitTest(const CPoint& point)
 	if (rc.PtInRect(point) == FALSE)
 		return -1;
 
-	int	i;
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE) {
-		i = 0;
-	} else {
-		i = m_nFirstIndexOnSingleLine;
-	}
+	int	i = CTabBarConfig::s_bMultiLine ? 0 : m_nFirstIndexOnSingleLine;
 
 	for (; i < GetItemCount(); ++i) {
 		if (GetItem(i).m_rcItem.PtInRect(point)){
@@ -767,10 +735,6 @@ void	CTabCtrlImpl::DeleteItem(int nIndex, bool bMoveNow)
 
 	m_items.erase(m_items.begin() + nIndex);
 
-	//		if ( nIndex < m_nActiveIndex ) {
-	//			// アクティブなタブの左側のタブが削除されたので一つずれる
-	//			--m_nActiveIndex;
-	//		}
 	m_nActiveIndex = -1;
 
 	_UpdateLayout();
@@ -864,7 +828,7 @@ bool	CTabCtrlImpl::MoveItems(int nDestIndex, const CSimpleArray<int> &arrSrcs)
 // bRight == trueで右にスクロールする
 bool	CTabCtrlImpl::ScrollItem(bool bRight)
 {
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE)
+	if (CTabBarConfig::s_bMultiLine)
 		return false;		// do nothing
 
 	if (bRight) {
@@ -900,16 +864,21 @@ bool	CTabCtrlImpl::ScrollItem(bool bRight)
 
 void	CTabCtrlImpl::SetItemText(int nIndex, LPCTSTR strText)
 {
-	CTabItem& item = GetItem(nIndex);
+	ATLASSERT(_IsValidIndex(nIndex));
 
-	item.m_strItem = strText;
+	CString strTab = strText;
+	//strTab = MtlCompactString(strTab, CTabBarConfig::s_nMaxTextLength);
+	if (m_items[nIndex].m_strItem == strTab)
+		return ;
 
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_FIXEDSIZE) {
-		InvalidateRect(item.m_rcItem);
+	m_items[nIndex].m_strItem = strTab;
+
+	if (CTabBarConfig::s_bUseFixedSize) {
+		InvalidateRect(m_items[nIndex].m_rcItem);
 		UpdateWindow();
 	} else {
-		InvalidateRect(item.m_rcItem);
-		_UpdateLayout();
+		InvalidateRect(m_items[nIndex].m_rcItem);	// even if layout will not be changed
+		_UpdateLayout();							//_UpdateItems(nIndex);
 	}
 }
 
@@ -971,12 +940,10 @@ void	CTabCtrlImpl::OnWindowPosChanging(LPWINDOWPOS lpWndPos)
 	m_wndDropBtn.InvalidateRect(&rc, TRUE);
 	_ShowOrHideUpDownCtrl( CRect(0, 0, size.cx, size.cy) );
 
-	if (GetTabCtrlExtendedStyle() & TAB2_EX_MULTILINE) {
+	if (CTabBarConfig::s_bMultiLine) {
 		_UpdateMultiLineLayout(size.cx);
 
-		if (GetTabCtrlExtendedStyle() & TAB2_EX_SUPPORTREBAR) {
-			_RefreshBandInfo();
-		}
+		_RefreshBandInfo();
 	}
 }
 

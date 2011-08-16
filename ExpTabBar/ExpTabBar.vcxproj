@@ -125,8 +125,8 @@
       <WarningLevel>Level3</WarningLevel>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PreprocessorDefinitions>WIN64;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Midl>
@@ -217,7 +217,7 @@
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <Optimization>MaxSpeed</Optimization>
-      <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN64;_WINDOWS;NDEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -275,6 +275,7 @@
     <ClCompile Include="DonutTabBar.cpp" />
     <ClCompile Include="ExpTabBand.cpp" />
     <ClCompile Include="ExpTabBar.cpp" />
+    <ClCompile Include="ExpTabBarOption.cpp" />
     <ClCompile Include="ExpTabBar_i.c">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">false</CompileAsManaged>
@@ -291,7 +292,7 @@
     </ClCompile>
     <ClCompile Include="IniFile.cpp" />
     <ClCompile Include="Misc.cpp" />
-    <ClCompile Include="ReflectionWnd.cpp" />
+    <ClCompile Include="ShellWrap.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">Create</PrecompiledHeader>
@@ -308,13 +309,13 @@
     <ClInclude Include="DonutFunc.h" />
     <ClInclude Include="DonutTabBar.h" />
     <ClInclude Include="ExpTabBand.h" />
+    <ClInclude Include="ExpTabBarOption.h" />
     <ClInclude Include="ExpTabBar_i.h" />
     <ClInclude Include="HlinkDataObject.h" />
     <ClInclude Include="IniFile.h" />
     <ClInclude Include="Misc.h" />
     <ClInclude Include="MtlDragDrop.h" />
     <ClInclude Include="OleDragDropTabCtrl.h" />
-    <ClInclude Include="ReflectionWnd.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="ShellWrap.h" />
     <ClInclude Include="stdafx.h" />

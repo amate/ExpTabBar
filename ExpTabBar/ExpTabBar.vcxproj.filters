@@ -17,6 +17,9 @@
       <UniqueIdentifier>{c49c4375-c8c6-412d-8dc4-5abd45550bd1}</UniqueIdentifier>
       <SourceControlFiles>False</SourceControlFiles>
     </Filter>
+    <Filter Include="ソース ファイル\オプション">
+      <UniqueIdentifier>{d46bd2d4-c8dd-4273-8e6e-1331e2445843}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DonutFunc.cpp">
@@ -32,9 +35,6 @@
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="Misc.cpp">
-      <Filter>ソース ファイル</Filter>
-    </ClCompile>
-    <ClCompile Include="ReflectionWnd.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="TabCtrl.cpp">
@@ -61,6 +61,12 @@
     <ClCompile Include="DonutTabBar.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="ShellWrap.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="ExpTabBarOption.cpp">
+      <Filter>ソース ファイル\オプション</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dllmain.h">
@@ -82,9 +88,6 @@
       <Filter>ソース ファイル</Filter>
     </ClInclude>
     <ClInclude Include="OleDragDropTabCtrl.h">
-      <Filter>ソース ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="ReflectionWnd.h">
       <Filter>ソース ファイル</Filter>
     </ClInclude>
     <ClInclude Include="stdafx.h">
@@ -119,6 +122,9 @@
     </ClInclude>
     <ClInclude Include="Resource.h">
       <Filter>リソース ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="ExpTabBarOption.h">
+      <Filter>ソース ファイル\オプション</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

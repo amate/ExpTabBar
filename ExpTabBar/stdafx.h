@@ -17,9 +17,10 @@
 #define _ATL_APARTMENT_THREADED
 //#define _ATL_NO_AUTOMATIC_NAMESPACE
 
-#define _ATL_CSTRING_EXPLICIT_CONSTRUCTORS	// 一部の CString コンストラクターは明示的です。
 #define _WTL_NO_CSTRING		// ATLのCStringを使う
 
+//////////////////////////////////
+// STL
 #include <vector>
 #include <algorithm>
 
@@ -32,15 +33,18 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 //ATLを使う為のファイル
+
+#include <atlstr.h>	// ATL::CString
+
 #include <atlbase.h>
 #include <atlapp.h>
 #include <atlcom.h>
 #include <atlconv.h>
-#include <atlwin.h>		//  ATLでWindow操作をする為。CWindowImplとか。
+#include <atlwin.h>
 #include <atlctl.h>
 #include <atlexcept.h>
 
-#include <atlcrack.h>	// UDT RAPT
+#include <atlcrack.h>
 #include <atlctl.h>
 
 #include <atlframe.h>
@@ -50,7 +54,6 @@
 
 #include <atlctrlx.h>
 #include <atlmisc.h>
-#include <atlstr.h>
 
 #include <atlcoll.h>
 #include <atltheme.h>

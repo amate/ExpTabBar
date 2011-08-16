@@ -1,14 +1,15 @@
 // DonutTabBar.cpp
 
 #include "stdafx.h"
-#include <UIAutomation.h>
 #include "DonutTabBar.h"
+#include <UIAutomation.h>
+#include <boost/thread.hpp>
 #include "ShellWrap.h"
-
 #include "resource.h"
 #include "DonutFunc.h"
 #include "IniFile.h"
 #include "XmlFile.h"
+#include "ExpTabBarOption.h"
 
 
 ////////////////////////////////////////////////////////////
@@ -17,20 +18,15 @@
 // Constructor
 CNotifyWindow::CNotifyWindow(CDonutTabBar* p)
 	: m_pTabBar(p)
-{
-}
+{	}
 
-// 
+/// 外部からタブを開く
 BOOL CNotifyWindow::OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct)
 {
 	LPCTSTR strFullPath = (LPCTSTR)pCopyDataStruct->lpData;
 	m_pTabBar->ExternalOpen(strFullPath);
 	return TRUE;
 }
-
-
-
-
 
 
 
@@ -48,21 +44,11 @@ CDonutTabBar::CDonutTabBar()
 	, m_wndNotify(this)
 	, m_nInsertIndex(-1)
 {
-	m_menuPopup.LoadMenu(IDM_TAB);
-	m_menuHistory = m_menuPopup.GetSubMenu(1).GetSubMenu(0);
-
 	m_vecHistoryItem.reserve(20);
 }
 
 CDonutTabBar::~CDonutTabBar()
 {
-#if 0
-	CString	strFilePath	= Misc::GetExeDirectory() + _T("Setting.ini");
-	CIniFileWrite	pr(strFilePath, _T("DonutTabBar"));
-	pr.SetValue(m_dwExtendedStyle	, _T("ExtendedStyle"));
-	pr.SetValue(m_nMaxHistory		, _T("MaxHistory"));
-	pr.ChangeSectionName(_T("TabCtrl"));
-#endif
 }
 
 void	CDonutTabBar::Initialize(IUnknown* punk)
@@ -84,27 +70,24 @@ void	CDonutTabBar::Initialize(IUnknown* punk)
 
 
 // フラグによって挿入位置を返す
-int		CDonutTabBar::_ManageInsert()
+int		CDonutTabBar::_ManageInsert(bool bLink)
 {
 	int  nCurSel = GetCurSel();
 
 	if (nCurSel == -1) {
 		return 0;
-	} else if (GetTabExtendedStyle() & MTB_EX_ADDLINKACTIVERIGHT) {
-		// リンクはアクティブなタブの右に追加
-		return nCurSel + 1;
-	} else if (GetTabExtendedStyle() & MTB_EX_ADDLEFT) {
-		// 一番左に追加
-		return 0;
-	} else if (GetTabExtendedStyle() & MTB_EX_ADDLEFTACTIVE) {
-		// アクティブなタブの左に追加
-		return nCurSel;
-	} else if (GetTabExtendedStyle() & MTB_EX_ADDRIGHTACTIVE) {
-		// アクティブなタブの右に追加
-		return nCurSel + 1;
+	} else if (bLink && CTabBarConfig::s_bAddLinkRight) {
+		return nCurSel + 1;		// リンクはアクティブなタブの右に追加
 	} else {
-		// 一番右にタブを追加
-		return GetItemCount();
+		switch (CTabBarConfig::s_nAddPos) {
+		case RIGHTPOS:		return GetItemCount();	// 一番右にタブを追加
+		case LEFTPOS:		return 0;				// 一番左に追加
+		case ACTIVERIGHT:	return nCurSel + 1;		// アクティブなタブの右に追加
+		case ACTIVELEFT:	return nCurSel;			// アクティブなタブの左に追加
+		default:
+			ATLASSERT(FALSE);
+			return 0;
+		};
 	}
 }
 
@@ -580,7 +563,7 @@ int CDonutTabBar::_ManageClose(int nActiveIndex)
 {
 	int	nCount	= GetItemCount();
 
-	if (GetTabExtendedStyle() & MTB_EX_LEFTACTIVEONCLOSE) {
+	if (CTabBarConfig::s_bLeftActiveOnClose) {
 		// 閉じるときアクティブなタブの左をアクティブにする
 		int nNext = nActiveIndex - 1;
 
@@ -593,7 +576,7 @@ int CDonutTabBar::_ManageClose(int nActiveIndex)
 				return nNext;
 			}
 		}
-	} else if (GetTabExtendedStyle() & MTB_EX_RIGHTACTIVEONCLOSE) {
+	} else {
 		// 閉じるときアクティブなタブの右をアクティブにする
 		int nNext = nActiveIndex + 1;
 
@@ -840,69 +823,8 @@ int		CDonutTabBar::_IDListIsEqualIndex(LPITEMIDLIST pidl)
 }
 
 
-void	CDonutTabBar::_thread_ChangeSelectedItem(LPVOID p)
-{
-	((CDonutTabBar*)p)->_ChangeSelectedItem();
-	_endthread();
-}
-
-void	CDonutTabBar::_ChangeSelectedItem()
-{
-	HRESULT	hr;
-	LPITEMIDLIST	pCurFolderItemIDList= NULL;
-	LPITEMIDLIST	pChildItemIDList	= NULL;
-	LPITEMIDLIST	pSelectedItemIDList = NULL;
-	CComPtr<IShellView>	pShellView;
-	hr = m_spShellBrowser->QueryActiveShellView(&pShellView);
-	if (hr == S_OK) {
-		CComPtr<IFolderView2>	pFolderView2;
-		hr = pShellView->QueryInterface(&pFolderView2);
-		if (hr == S_OK) {
-			int	nIndex;
-			for (int i = 0; i < 4; ++i) {
-				hr = pFolderView2->GetSelectedItem(0, &nIndex);
-				ATLTRACE(_T(" nIndex : %d\n"), nIndex);
-				if (nIndex != -1) {
-					break;
-				}
-				::Sleep(100);
-			}
-			if (nIndex == -1) {
-				return;
-			}
-
-			hr = pFolderView2->Item(nIndex, &pChildItemIDList);
-			if (hr == S_OK) {
-				pCurFolderItemIDList = GetCurIDList(m_spShellBrowser);
-				pSelectedItemIDList = ::ILCombine(pCurFolderItemIDList, pChildItemIDList);
-
-				CComPtr<IShellItem>	pShellItem;
-				hr = ::SHCreateItemFromIDList(pSelectedItemIDList, IID_IShellItem, (void**)&pShellItem);
-				if (hr == S_OK) {
-					SFGAOF	Attribs = 0;
-					hr = pShellItem->GetAttributes(SFGAO_FOLDER, &Attribs);
-					if (hr == S_OK && Attribs == SFGAO_FOLDER) {	// フォルダの場合のみタブで開く
-						/* 新しいタブで開く */
-						int nNewIndex = OnTabCreate(pSelectedItemIDList);
-
-						::CoTaskMemFree(pCurFolderItemIDList);
-						::CoTaskMemFree(pChildItemIDList);
-						return;
-					}
-				}
-			}
-		}
-	}
-	ATLASSERT(FALSE);
-}
-
-void	CDonutTabBar::_thread_VoidTabRemove(LPVOID p)
-{
-	((CDonutTabBar*)p)->_VoidTabRemove();
-	_endthread();
-}
-
-void	CDonutTabBar::_VoidTabRemove()
+/// 無効なタブを削除する
+void	CDonutTabBar::_threadVoidTabRemove()
 {
 	::Sleep(500);
 	CLockRedraw Lock(m_hWnd);
@@ -941,8 +863,8 @@ void	CDonutTabBar::_AddHistory(int nDestroy)
 		}
 	}
 
-	if (m_vecHistoryItem.size() > m_nMaxHistory) {
-		_DeleteHistory(m_nMaxHistory);
+	if (m_vecHistoryItem.size() > CTabBarConfig::s_nMaxHistoryCount) {
+		_DeleteHistory(CTabBarConfig::s_nMaxHistoryCount);
 	}
 }
 
@@ -1064,7 +986,8 @@ void	CDonutTabBar::_ClearSearchText()
 
 // 新しいタブを作る
 // bAddLast == trueで最後に追加
-int		CDonutTabBar::OnTabCreate(LPITEMIDLIST pidl, bool bAddLast, bool bInsert)
+// bInset == trueで設定された挿入位置(m_nInsertIndex)に追加
+int		CDonutTabBar::OnTabCreate(LPITEMIDLIST pidl, bool bAddLast /*= false*/, bool bInsert /*= false*/, bool bLink /*= false*/)
 {
 	ATLASSERT(pidl);
 
@@ -1072,7 +995,7 @@ int		CDonutTabBar::OnTabCreate(LPITEMIDLIST pidl, bool bAddLast, bool bInsert)
 	if (bAddLast) {
 		nPos = GetItemCount();
 	} else {
-		nPos = _ManageInsert();
+		nPos = _ManageInsert(bLink);
 	}
 	if (bInsert && m_nInsertIndex != -1)
 		nPos = m_nInsertIndex;
@@ -1091,7 +1014,10 @@ int		CDonutTabBar::OnTabCreate(LPITEMIDLIST pidl, bool bAddLast, bool bInsert)
 	item.m_pTravelLogBack = new TRAVELLOG;
 	item.m_pTravelLogFore = new TRAVELLOG;
 
-	return InsertItem(nPos, item);
+	int nNewIndex = InsertItem(nPos, item);
+	if (bLink && CTabBarConfig::s_bLinkActive)
+		SetCurSel(nNewIndex);
+	return nNewIndex;
 }
 
 // nDestroyにあるタブを削除する
@@ -1165,15 +1091,14 @@ void	CDonutTabBar::ExternalOpen(LPCTSTR strFullPath)
 	Misc::SetForegroundWindow(GetTopLevelWindow());
 	LPITEMIDLIST pidl = CreateIDListFromFullPath(strFullPath);
 	
-	/* すでに開いてるタブがあればそっちに移動する */
 	int nIndex = _IDListIsEqualIndex(pidl);
-	if (nIndex != -1) {
-		if (nIndex != GetCurSel()) {
+	if (nIndex != -1) {					
+		if (nIndex != GetCurSel()) {		/* すでに開いてるタブがあればそっちに移動する */
 			_SaveSelectedIndex(GetCurSel());
 			SetCurSel(nIndex);
 		}
 	} else {
-		SetCurSel(OnTabCreate(pidl, true));
+		SetCurSel(OnTabCreate(pidl));
 	}
 }
 
@@ -1258,7 +1183,7 @@ HRESULT		CDonutTabBar::OnGetTabCtrlDataObject(CSimpleArray<int> arrIndex, IDataO
 void	CDonutTabBar::OnVoidTabRemove(const CSimpleArray<int>& arrCurDragItems)
 {
 	m_arrDragItems = arrCurDragItems;
-	_beginthread(_thread_VoidTabRemove, 0, this);
+	boost::thread	thrd(boost::bind(&CDonutTabBar::_threadVoidTabRemove, this));
 }
 
 
@@ -1376,7 +1301,7 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 			return dropEffect;
 		}
 
-		if (m_bLeftButton == false) {	// 右ボタンでドロップされたときのみ有効
+		if (m_bLeftButton == false) {	// 右ボタンでドロップされたとき
 			CComPtr<IShellFolder>	pShellFolder;
 			LPCITEMIDLIST	ppidlLast;
 			hr = ::SHBindToParent(GetItemIDList(nIndex), IID_IShellFolder, (LPVOID*)&pShellFolder, &ppidlLast);
@@ -1407,32 +1332,10 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 					}
 				}
 			}
-		} else {	// 左クリックの場合
-			HRESULT	hr;
-			CComPtr<IShellItem>	pShellItemTo;	// 送り先
-			hr = ::SHCreateItemFromIDList(GetItemIDList(nIndex), IID_PPV_ARGS(&pShellItemTo));
-			if (hr == S_OK) {
-				CComPtr<IFileOperation>	pFileOperation;
-				hr = pFileOperation.CoCreateInstance(CLSID_FileOperation);
-				if (hr == S_OK) {
-					if (dropEffect == DROPEFFECT_MOVE){
-						hr = pFileOperation->MoveItems(pDataObject, pShellItemTo);
-					} else if (dropEffect == DROPEFFECT_COPY) {
-						hr = pFileOperation->CopyItems(pDataObject, pShellItemTo);
-					} else {
-//						ATLASSERT(FALSE);	// 移動でもコピーでもなかったので帰る
-						return dropEffect;
-					}
-					if (hr == S_OK) {
-						hr = pFileOperation->PerformOperations();
-						if (hr == S_OK) {
-							goto ESCAPE;
-						}
-					}
-				}
-			}
+		} else {	// 左ボタンでドロップされた場合
+			pDataObject->AddRef();
+			boost::thread	thrd(boost::bind(&CDonutTabBar::_threadPerformSHFileOperation, this, GetItemIDList(nIndex), pDataObject, dropEffect == DROPEFFECT_MOVE));
 		}
-		ATLASSERT(FALSE);
 	}
 	ESCAPE:
 	return __super::OnDrop(pDataObject, dropEffect, dropEffectList, point);
@@ -1650,18 +1553,12 @@ int		CDonutTabBar::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	SetMsgHandled(FALSE);
 
 	/* 設定を読み込み */
-	CString	strFilePath	= Misc::GetExeDirectory() + _T("Setting.ini");
-	CIniFileRead	pr(strFilePath, _T("DonutTabBar"));
-	m_dwExtendedStyle	= pr.GetValue(_T("ExtendedStyle"), MTB_EX_DEFAULT_BITS);
-	m_nMaxHistory		= pr.GetValue(_T("MaxHistory"), 16);
+	CTabBarConfig::LoadConfig();
 
-	pr.ChangeSectionName(_T("TabCtrl"));
-	SetTabCtrlExtendedStyle	(pr.GetValue(_T("TabCtrlExtendedStyle")	, TAB2_EX_DEFAULT_BITS));
-	SetTabStyle				(pr.GetValue(_T("TabStyle")				, SKN_TAB_STYLE_THEME));
-	CSize	size;
-	size.cx	= pr.GetValue(_T("TabSize.x"), 110);
-	size.cy	= pr.GetValue(_T("TabSize.y"), 24);
-	SetItemSize(size);
+	CString	strFilePath	= Misc::GetExeDirectory() + _T("Setting.ini");
+	CIniFileRead	pr(strFilePath, _T("TabCtrl"));
+	SetTabStyle(pr.GetValue(_T("TabStyle"), SKN_TAB_STYLE_THEME));
+
 	ReloadSkinData();
 
 	RestoreHistory();
@@ -1673,6 +1570,11 @@ int		CDonutTabBar::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	const int ids[] = { 0, 0xA005, 0, 0, 0, -1 };
 	m_hSearch = FindChildWindowIDRecursive(GetTopLevelWindow(), kls, ids);
 	ATLASSERT(m_hSearch);
+
+	m_menuPopup.LoadMenu(IDM_TAB);
+	m_menuHistory = m_menuPopup.GetSubMenu(1).GetSubMenu(0);
+
+	SetTimer(AutoSaveTimerID, AutoSaveInterval);
 
 	return 0;
 }
@@ -1701,6 +1603,8 @@ void	CDonutTabBar::OnDestroy()
 		m_bSaveAllTab = false;
 	}
 
+	KillTimer(AutoSaveTimerID);
+
 	m_hWnd = NULL;
 }
 
@@ -1710,24 +1614,10 @@ void	CDonutTabBar::OnRButtonUp(UINT nFlags, CPoint point)
 {
 	// Overrides
 	int nIndex = HitTest(point);
-
 	if (nIndex != -1) {
-//		SaveAllTab();
-//		NavigateLockTab(nIndex, true);
-		
-//		HWND hWndChild = GetTabPidl(nIndex);
-//		ATLASSERT(hWndChild != NULL);
+		_ExeCommand(nIndex, CTabBarConfig::s_RClickCommand);
 
-		if (GetTabExtendedStyle() & MTB_EX_RIGHTCLICKCLOSE) {
-			OnTabDestroy(nIndex);
-		} else if (m_menuPopup.m_hMenu) {
-			CMenuHandle	menu = m_menuPopup.GetSubMenu(0);
-			ClientToScreen(&point);
-			m_ClickedIndex = nIndex;
-			menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,
-								point.x, point.y, m_hWnd);
-		}
-	} else {
+	} else {	// タブ外
 		m_tipHistroy.SetWindowPos(HWND_TOPMOST, -1, -1, -1, -1, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
 
 		CToolInfo	tinfo(TTF_SUBCLASS | TTF_TRACK, m_hWnd, 0, NULL, _T(""));
@@ -1741,38 +1631,6 @@ void	CDonutTabBar::OnRButtonUp(UINT nFlags, CPoint point)
 							point.x, point.y, m_hWnd);
 		m_tipHistroy.Activate(FALSE);
 	}
-
-//	RestoreAllTab();
-#if 0
-		else if (GetTabExtendedStyle() & MTB_EX_RIGHTCLICKREFRESH) {
-			::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_VIEW_REFRESH, 0);
-		} else if ( (GetTabExtendedStyle() & MTB_EX_RIGHTCLICKCOMMAND) && m_nRClickCommand ) {
-			::PostMessage(GetTopLevelParent(), WM_COMMAND, (WPARAM) m_nRClickCommand, 0);
-		} else if (m_menuPopup.m_hMenu) {
-			ClientToScreen(&point);
-			CMenuHandle menu	 = m_menuPopup.GetSubMenu(0);
-
-			DWORD			dwRLFlag = 0;
-			CIniFileRead	pr( _GetFilePath( _T("Menu.ini") ), _T("Option") );
-			pr.QueryValue( dwRLFlag, _T("REqualL") );
-
-			if (dwRLFlag)
-				dwRLFlag = TPM_RIGHTBUTTON;
-
-			menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON | dwRLFlag,
-								point.x, point.y,
-								m_hWndMenuOwner != NULL ? m_hWndMenuOwner : hWndChild);
-		} else {																						// system menu (default)
-			CMenuHandle menuSys = ::GetSystemMenu(hWndChild, FALSE);
-			ClientToScreen(&point);
-			m_wndMDIChildPopuping = hWndChild;
-			_UpdateMenu(menuSys);
-			menuSys.TrackPopupMenu(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON | TPM_RIGHTBUTTON, point.x, point.y, m_hWnd);			// owner is me!!
-		}
-	} else {
-		::SendMessage(GetTopLevelParent(), WM_SHOW_TOOLBARMENU, 0, 0);
-	}
-#endif
 }
 
 void	CDonutTabBar::OnInitMenuPopup(CMenuHandle menuPopup, UINT nIndex, BOOL bSysMenu)
@@ -1824,40 +1682,9 @@ void	CDonutTabBar::OnLButtonDblClk(UINT nFlags, CPoint point)
 {
 	SetMsgHandled(FALSE);
 
-	CSimpleArray<int> arrCurMultiSel;
-	GetCurMultiSel(arrCurMultiSel, true);
-
-	if (arrCurMultiSel.GetSize() > 1) {
-		for (int i = 0; i < arrCurMultiSel.GetSize(); ++i) {
-//			hWndChild = GetTabPidl(arrCurMultiSel[i]);
-
-			if (GetTabExtendedStyle() & MTB_EX_DOUBLECLICKCLOSE) {
-				OnTabDestroy(arrCurMultiSel[i]);
-			} else if (GetTabExtendedStyle() & MTB_EX_DOUBLECLICKREFRESH) {
-//				::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_VIEW_REFRESH, 0);
-			} else if (GetTabExtendedStyle() & MTB_EX_DOUBLECLICKNLOCK) {
-//				::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_DOCHOSTUI_OPENNEWWIN, 0);
-			} 
-//			else if ( (GetTabExtendedStyle() & MTB_EX_DOUBLECLICKCOMMAND) && m_nDClickCommand ) {
-//				::PostMessage(GetTopLevelParent(), WM_COMMAND, (WPARAM) m_nDClickCommand, 0);
-//			}
-		}
-	} else {
-		int nIndex = HitTest(point);
-
-		if (nIndex != -1) {
-			if (GetTabExtendedStyle() & MTB_EX_DOUBLECLICKCLOSE) {
-				OnTabDestroy(nIndex);
-			} else if (GetTabExtendedStyle() & MTB_EX_DOUBLECLICKREFRESH) {
-//				::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_VIEW_REFRESH, 0);
-			} else if (GetTabExtendedStyle() & MTB_EX_DOUBLECLICKNLOCK) {
-//				::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_DOCHOSTUI_OPENNEWWIN, 0);
-			} 
-//			else if ( (m_dwExtendedStyle & MTB_EX_DOUBLECLICKCOMMAND) && m_nDClickCommand ) {
-//				::PostMessage(GetTopLevelParent(), WM_COMMAND, (WPARAM) m_nDClickCommand, 0);
-//			}
-		}
-	}
+	int nIndex = HitTest(point);
+	if (nIndex != -1)
+		_ExeCommand(nIndex, CTabBarConfig::s_DblClickCommand);
 }
 
 // ホイールクリック(ミドルクリック)
@@ -1865,89 +1692,39 @@ void	CDonutTabBar::OnMButtonUp(UINT nFlags, CPoint point)
 {
 	SetMsgHandled(FALSE);
 
-	CSimpleArray<int> arrCurMultiSel;
-	GetCurMultiSel(arrCurMultiSel, true);
+	int nIndex = HitTest(point);
+	if (nIndex != -1)
+		_ExeCommand(nIndex, CTabBarConfig::s_MClickCommand);
+}
 
-	if (arrCurMultiSel.GetSize() > 1) {
-		for (int i = 0; i < arrCurMultiSel.GetSize(); ++i) {
-			if (GetTabExtendedStyle() & MTB_EX_XCLICKCLOSE) {
-				OnTabDestroy(arrCurMultiSel[i]);
-			} else if (GetTabExtendedStyle() & MTB_EX_XCLICKREFRESH) {
-//				::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_VIEW_REFRESH, 0);
-			} else if (GetTabExtendedStyle() & MTB_EX_XCLICKNLOCK) {
-//				::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_DOCHOSTUI_OPENNEWWIN, 0);
-			} 
-//			else if ( (GetTabExtendedStyle() & MTB_EX_XCLICKCOMMAND) && m_nXClickCommand ) {
-////				::PostMessage(GetTopLevelParent(), WM_COMMAND, (WPARAM) m_nXClickCommand, 0);
-//			}
-		}
-	} else {
-		int nIndex = HitTest(point);
-
-		if (nIndex != -1) {
-
-//			hWndChild = GetTabPidl(nIndex);
-
-			if (GetTabExtendedStyle() & MTB_EX_XCLICKCLOSE) {
-				OnTabDestroy(nIndex);
-			} else if (GetTabExtendedStyle() & MTB_EX_XCLICKREFRESH) {
-//				::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_VIEW_REFRESH, 0);
-			} else if (GetTabExtendedStyle() & MTB_EX_XCLICKNLOCK) {
-//				::PostMessage(hWndChild, WM_COMMAND, (WPARAM) ID_DOCHOSTUI_OPENNEWWIN, 0);
-			} 
-//			else if ( (GetTabExtendedStyle() & MTB_EX_XCLICKCOMMAND) && m_nXClickCommand ) {
-////				::PostMessage(GetTopLevelParent(), WM_COMMAND, (WPARAM) m_nXClickCommand, 0);
-//			}
-		}
+/// 自動セーブ
+void	CDonutTabBar::OnTimer(UINT_PTR nIDEvent)
+{
+	if (nIDEvent == AutoSaveTimerID) {
+		SaveAllTab();
 	}
 }
 
-
-LRESULT CDonutTabBar::OnNewTabButton(UINT uMsg, WPARAM wParam, LPARAM lParam)
+/// ホイールでタブ切り替え
+BOOL	CDonutTabBar::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 {
-	LPPOINT ppt = (LPPOINT)lParam;
-	HRESULT	hr;
-	CComPtr<IShellView>	spShellView;
-	hr = m_spShellBrowser->QueryActiveShellView(&spShellView);
-	if (hr == S_OK) {
-		HWND	hWnd;
-		hr = spShellView->GetWindow(&hWnd);
-		if (hr == S_OK) {
-			ATLASSERT(::IsWindow(hWnd));
+	if (CTabBarConfig::s_bWheel) {
+		int nIndex = GetCurSel();
+		int nCount = GetItemCount();
+		if (nCount <= 1)
+			return 0;
 
-			CRect	rc;
-			::GetWindowRect(hWnd, &rc);
-			if (rc.PtInRect(*ppt) != 0) {
-				INPUT	Inputs[2] = { 0 };
-				Inputs[0].type			= INPUT_MOUSE;
-				Inputs[0].mi.dwFlags	= MOUSEEVENTF_LEFTDOWN;
-
-				Inputs[1].type			= INPUT_MOUSE;
-				Inputs[1].mi.dwFlags	= MOUSEEVENTF_LEFTUP;
-				::SendInput(2, Inputs, sizeof(INPUT));
-			#if 0
-				::ScreenToClient(m_hShellDefView, ppt);
-				::SendMessage(m_hShellDefView, WM_PARENTNOTIFY, WM_LBUTTONDOWN, MAKELPARAM( (DWORD)ppt->x, (DWORD)ppt->y));
-			#endif
-
-				CComPtr<IShellView>	pShellView;
-				hr = m_spShellBrowser->QueryActiveShellView(&pShellView);
-				if (hr == S_OK) {
-					CComPtr<IFolderView>	pFolderView;
-					hr = pShellView->QueryInterface(&pFolderView);
-					if (hr == S_OK) {
-						hr = pFolderView->SelectItem(NULL, SVSI_DESELECTOTHERS);
-
-						_beginthread(_thread_ChangeSelectedItem, NULL, this);
-						return 0;
-					}
-				}
-				ATLASSERT(FALSE);
-			}
-		}	
+		int nNext;
+		if (zDelta > 0) {
+			nNext  = nIndex - 1 < 0 ? nCount - 1 : nIndex - 1;
+		} else {
+			nNext  = (nIndex + 1 < nCount) ? nIndex + 1 : 0;
+		}
+		SetCurSel(nNext);
 	}
 	return 0;
 }
+
 
 
 void	CDonutTabBar::OnTabClose(UINT uNotifyCode, int nID, CWindow wndCtl)
@@ -2017,6 +1794,7 @@ void	CDonutTabBar::OnOpenUpFolder(UINT uNotifyCode, int nID, CWindow wndCtl)
 	}
 }
 
+/// タブをナビゲートロック状態にする
 void	CDonutTabBar::OnNavigateLock(UINT uNotifyCode, int nID, CWindow wndCtl)
 {
 	CSimpleArray<int> arrCurMultiSel;
@@ -2031,6 +1809,16 @@ void	CDonutTabBar::OnNavigateLock(UINT uNotifyCode, int nID, CWindow wndCtl)
 		InvalidateRect(item.m_rcItem, FALSE);
 	}
 }
+
+/// オプションを開く
+void	CDonutTabBar::OnOpenOption(UINT uNotifyCode, int nID, CWindow wndCtl)
+{
+	CExpTabBarOption	dlg;
+	dlg.Show(m_hWnd);
+
+	_UpdateLayout();
+}
+
 
 void	CDonutTabBar::OnClosedTabCreate(UINT uNotifyCode, int nID, CWindow wndCtl)
 {
@@ -2070,9 +1858,61 @@ void CDonutTabBar::_SaveSelectedIndex(int nIndex)
 
 
 
+void	CDonutTabBar::_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObject* pDataObject, bool bMove)
+{
+	HRESULT	hr;
+	CComPtr<IShellItem>	pShellItemTo;	// 送り先
+	hr = ::SHCreateItemFromIDList(pidlTo, IID_PPV_ARGS(&pShellItemTo));
+	if (hr == S_OK) {
+		CComPtr<IFileOperation>	pFileOperation;
+		hr = pFileOperation.CoCreateInstance(CLSID_FileOperation);
+		if (hr == S_OK) {
+			if (bMove){
+				hr = pFileOperation->MoveItems(pDataObject, pShellItemTo);
+			} else {
+				hr = pFileOperation->CopyItems(pDataObject, pShellItemTo);
+			}
+			if (hr == S_OK) {
+				hr = pFileOperation->PerformOperations();
+			}
+		}
+	}
+	pDataObject->Release();
+}
 
+/// 設定したクリックコマンドを実行する
+void	CDonutTabBar::_ExeCommand(int nIndex, int Command)
+{
+	switch (Command) {
+	case TABCLOSE:
+		m_ClickedIndex = nIndex;
+		OnTabClose(0, 0, 0);
+		break;
 
+	case OPEN_UPFOLDER:
+		m_ClickedIndex = nIndex;
+		OnOpenUpFolder(0, 0, 0);
+		break;
 
+	case NAVIGATELOCK:
+		m_ClickedIndex = nIndex;
+		OnNavigateLock(0, 0, 0);
+		break;
+
+	case SHOWMENU: {
+		ATLASSERT(m_menuPopup.IsMenu());
+		CMenuHandle	menu = m_menuPopup.GetSubMenu(0);
+		POINT	pt;
+		::GetCursorPos(&pt);
+		m_ClickedIndex = nIndex;
+		menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,
+							pt.x, pt.y, m_hWnd);
+		break;
+	}
+	default:
+		break;
+	};
+}
 
 
 
