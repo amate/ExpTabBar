@@ -385,7 +385,8 @@ inline bool _MtlIsHlinkDataObject(IDataObject *pDataObject)
 {
 	return	MtlIsDataAvailable(pDataObject, CF_HDROP)
 		 || MtlIsDataAvailable(pDataObject, CF_UNICODETEXT)
-		 || MtlIsDataAvailable(pDataObject, ::RegisterClipboardFormat(CFSTR_SHELLURL));
+		 //|| MtlIsDataAvailable(pDataObject, ::RegisterClipboardFormat(CFSTR_SHELLURL))
+		 || MtlIsDataAvailable(pDataObject, ::RegisterClipboardFormat(CFSTR_SHELLIDLIST));
 }
 
 

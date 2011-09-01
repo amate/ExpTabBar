@@ -29,6 +29,10 @@ CString GetNameFromIDList(PCIDLIST_ABSOLUTE pidl);
 PIDLIST_ABSOLUTE GetCurIDList(IShellBrowser* pShellBrowser);
 
 
+/// lnkのリンク先を返します
+PIDLIST_ABSOLUTE GetResolveIDList(PIDLIST_ABSOLUTE pidl);
+
+
 /// アイテムＩＤリストで示されるフォルダが存在するかどうか
 bool	IsExistFolderFromIDList(PCIDLIST_ABSOLUTE pidl);
 

@@ -51,6 +51,7 @@ void	CTabCtrlImpl::_InitToolTip()
 	ATLASSERT( m_tip.IsWindow() );
 
 	CToolInfo	tinfo(TTF_SUBCLASS, m_hWnd);
+	tinfo.hwnd	= m_hWnd;	//\\+ こうしないとこのウィンドウにGetDispInfoが来ない
 	m_tip.AddTool(tinfo);
 	m_tip.SetMaxTipWidth(SHRT_MAX);
 	m_tip.SetDelayTime(TTDT_AUTOPOP, 30 * 1000);
@@ -559,9 +560,9 @@ bool	CTabCtrlImpl::CanScrollItem(bool bRight) const
 int		CTabCtrlImpl::ReplaceIcon(int nIndex, HICON hIcon)
 {
 	int nIconIndex = GetItemImageIndex(nIndex);
-	ATLASSERT(nIconIndex != -1);
 	int nImg = m_imgs.ReplaceIcon(nIconIndex, hIcon);
 	::DestroyIcon(hIcon);
+	m_items[nIndex].m_nImgIndex = nImg;
 
 	InvalidateRect(GetItem(nIndex).m_rcItem, FALSE);
 	UpdateWindow();
@@ -653,9 +654,9 @@ int		CTabCtrlImpl::HitTest(const CPoint& point)
 		return -1;
 
 	int	i = CTabBarConfig::s_bMultiLine ? 0 : m_nFirstIndexOnSingleLine;
-
-	for (; i < GetItemCount(); ++i) {
-		if (GetItem(i).m_rcItem.PtInRect(point)){
+	int nCount = GetItemCount();
+	for (; i < nCount; ++i) {
+		if (m_items[i].m_rcItem.PtInRect(point)){
 			return i;
 		}
 	}

@@ -179,7 +179,7 @@ void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
 		m_bNavigateCompleted = false;
 
 		if (m_wndShellView.m_hWnd)
-			m_wndShellView.UnsubclassWindow();
+			m_wndShellView.UnsubclassWindow(TRUE);
 
 		HWND hWnd;
 		CComPtr<IShellView>	spShellView;
@@ -234,9 +234,47 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 		} else {
 			HRESULT	hr;
 			CComPtr<IUIAutomation>	spUIAutomation;
-			hr = CoCreateInstance(__uuidof(CUIAutomation), NULL, CLSCTX_INPROC_SERVER, __uuidof(IUIAutomation), (void**)&spUIAutomation);
+			hr = ::CoCreateInstance(__uuidof(CUIAutomation), NULL, CLSCTX_INPROC_SERVER, __uuidof(IUIAutomation), (void**)&spUIAutomation);
 			ATLASSERT(spUIAutomation);
 
+			CComPtr<IUIAutomationElement>	spShellViewElement;
+			hr = spUIAutomation->ElementFromHandle(m_wndShellView, &spShellViewElement);
+			if (FAILED(hr))
+				return ;
+
+
+			CComVariant	vProp(UIA_ListItemControlTypeId);
+			CComPtr<IUIAutomationCondition>	spCondition;
+			hr = spUIAutomation->CreatePropertyCondition(UIA_ControlTypePropertyId, vProp, &spCondition);
+			if (FAILED(hr)) 
+				return ;
+
+			CComPtr<IUIAutomationElementArray>	spUIElementArray;
+			hr = spShellViewElement->FindAll(TreeScope_Descendants, spCondition, &spUIElementArray);
+			if (FAILED(hr) || spUIElementArray == nullptr)
+				return ;
+
+			POINT	pt;
+			::GetCursorPos(&pt);
+			
+			int nCount = 0;
+			spUIElementArray->get_Length(&nCount);
+			for (int i = 0; i < nCount; ++i) {
+				CComPtr<IUIAutomationElement>	spUIElm;
+				spUIElementArray->GetElement(i, &spUIElm);
+				BOOL	bOffScreen = FALSE;
+				spUIElm->get_CurrentIsOffscreen(&bOffScreen);
+				if (bOffScreen)
+					continue;
+				CRect rcItem;
+				spUIElm->get_CurrentBoundingRectangle(&rcItem);
+				if (rcItem.PtInRect(pt)) {	// Œ©‚Â‚©‚Á‚½
+					nIndex = i;
+					break;
+				}
+			}
+
+#if 0	//\\ ‚±‚Á‚¿‚Í‚¿‚å‚Á‚Æ–â‘è‚ª‚ ‚é
 			POINT pt;
 			::GetCursorPos(&pt);
 			CComPtr<IUIAutomationElement>	spPointedElement;
@@ -268,6 +306,7 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 			spItemUIElement->get_CurrentAutomationId(&strID);
 			if (strID)
 				nIndex = boost::lexical_cast<int>((LPCTSTR)CString(strID));
+#endif
 		}
 
 		if (nIndex == -1)
@@ -286,11 +325,27 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 
 		LPITEMIDLIST pidlFolder = ShellWrap::GetCurIDList(m_spShellBrowser);
 		LPITEMIDLIST pidlSelectedItem = ::ILCombine(pidlFolder, pidlChild);
-		CString strSelectedPath = GetFullPathFromIDList(pidlSelectedItem);
-		if (::PathIsDirectory(strSelectedPath)) {
-			m_wndTabBar.OnTabCreate(pidlSelectedItem, false, false, true);
-		} else {
-			::ILFree(pidlSelectedItem);
+
+		// ƒŠƒ“ƒN‚Í‰ðŒˆ‚·‚é
+		CComPtr<IShellItem>	spShellItem;
+		hr = ::SHCreateItemFromIDList(pidlSelectedItem, IID_IShellItem, (LPVOID*)&spShellItem);
+		if (hr == S_OK) {
+			SFGAOF	attribute;
+			spShellItem->GetAttributes(SFGAO_LINK, &attribute);
+			if (attribute & SFGAO_LINK) {
+				LPITEMIDLIST	pidlLink = ShellWrap::GetResolveIDList(pidlSelectedItem);
+				if (pidlLink)
+					m_wndTabBar.OnTabCreate(pidlLink, false, false, true);
+				::ILFree(pidlSelectedItem);
+				pidlSelectedItem = nullptr;
+			}
+		}
+		if (pidlSelectedItem) {
+			if (IsExistFolderFromIDList(pidlSelectedItem)) {
+				m_wndTabBar.OnTabCreate(pidlSelectedItem, false, false, true);
+			} else {
+				::ILFree(pidlSelectedItem);
+			}
 		}
 
 		::ILFree(pidlFolder);

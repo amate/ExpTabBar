@@ -111,16 +111,50 @@ PIDLIST_ABSOLUTE GetCurIDList(IShellBrowser* pShellBrowser)
 	return NULL;
 }
 
+
+/// lnkのリンク先を返します
+PIDLIST_ABSOLUTE GetResolveIDList(PIDLIST_ABSOLUTE pidl)
+{
+	CString strLinkPath = ShellWrap::GetFullPathFromIDList(pidl);
+
+	CComPtr<IShellLink>	spShellLink;
+	HRESULT hr = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLink, (void **)&spShellLink);
+	if (FAILED(hr)) 
+		return nullptr;
+
+	CComQIPtr<IPersistFile>	spPersistFile = spShellLink;
+	hr = spPersistFile->Load(strLinkPath, STGM_READ);
+	if (FAILED(hr)) 
+		return nullptr;
+
+	hr = spShellLink->Resolve(NULL, SLR_NOSEARCH);
+	LPITEMIDLIST	pidlLink;
+	hr = spShellLink->GetIDList(&pidlLink);
+	return pidlLink;
+}
+
+
+
+
 /// アイテムＩＤリストで示されるフォルダが存在するかどうか
 bool	IsExistFolderFromIDList(PCIDLIST_ABSOLUTE pidl)
 {
+	CString strFolderPath = GetFullPathFromIDList(pidl);
+	DWORD	dwAttributes = ::GetFileAttributes(strFolderPath);
+	if (   dwAttributes != -1 && dwAttributes & FILE_ATTRIBUTE_DIRECTORY
+		|| strFolderPath.GetLength() >= 3 && (strFolderPath.Mid(1) == _T(":\\") || strFolderPath.Left(3) == _T("::{"))) 
+	{
+		return true;
+	}
+	return false;
+#if 0
 	CString strFolderPath = GetFullPathFromIDList(pidl);
 	if (::PathIsDirectory(strFolderPath)
 		|| strFolderPath.Mid(1, 2) != _T(":\\")) {
 		return true;
 	}
 	return false;
-
+#endif
 }
 
 LPBYTE	GetByteArrayFromBinary(int nSize, std::wstring strBinary)

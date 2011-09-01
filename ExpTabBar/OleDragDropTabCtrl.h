@@ -57,7 +57,9 @@ public:
 	virtual ~COleDragDropTabCtrl() { };
 
 
-private:
+//private:
+protected:
+
 	// Overridables
 	bool OnNewTabCtrlItems(int nInsertIndex, CSimpleArray<CTabItem>& items, IDataObject* pDataObject, DROPEFFECT& dropEffect)
 	{
@@ -88,7 +90,7 @@ private:
 	{ 
 		htInsetLeft, 	// タブバーの左
 //		htInsetRight, 	// タブバーの右
-//		htItem, 		// タブ
+		htItem, 		// タブ
 		htSeparator, 	// タブの境界
 		htOutside, 		// タブバーの領域外
 		htWhole, 		// タブがない?
@@ -596,7 +598,8 @@ public:
 	void OnDragLeave() { _ClearInsertionEdge(); }
 
 
-private:
+//private:
+protected:
 	// Implementation
 
 	void _ClearInsertionEdge()
@@ -679,7 +682,6 @@ private:
 				rcItem.bottom);
 
 		}
-#if 0 
 		else if (flag == htItem) {
 			ATLASSERT( _IsValidIndex(nIndex) );
 			rcItem	= m_items[nIndex].m_rcItem;
@@ -687,7 +689,6 @@ private:
 			rcInvalidateOnDrawingInsertionEdge = rcItem;
 
 		}
-#endif
 		else if (flag == htWhole) {
 			GetClientRect(rcItem);
 			_DrawInsertionEdgeAux(rcItem.TopLeft(), insertLeft);

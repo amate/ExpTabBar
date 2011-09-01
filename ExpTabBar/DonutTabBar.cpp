@@ -840,6 +840,9 @@ void	CDonutTabBar::_AddHistory(int nDestroy)
 	if (IsExistFolderFromIDList(GetItemIDList(nDestroy)) == false) {
 		return ;
 	}
+	/* トラベルログ保存 */
+	_SaveTravelLog(nDestroy);
+
 	HistoryItem	item;
 
 	item.pidl		= ::ILClone(GetItemIDList(nDestroy));
@@ -856,6 +859,7 @@ void	CDonutTabBar::_AddHistory(int nDestroy)
 
 	m_vecHistoryItem.insert(m_vecHistoryItem.begin(), item);
 
+	// 重複を削除する
 	for (int i = 1; i < m_vecHistoryItem.size(); ++i) {
 		if (m_vecHistoryItem[i].strFullPath == item.strFullPath) {
 			_DeleteHistory(i);
@@ -1218,7 +1222,7 @@ DROPEFFECT CDonutTabBar::OnDragEnter(IDataObject *pDataObject, DWORD dwKeyState,
 			::GlobalUnlock(medium.hGlobal);
 			::ReleaseStgMedium(&medium);
 		} else {
-			ATLASSERT(FALSE);
+			m_bDragAccept	= false;	//\\+
 			return DROPEFFECT_NONE;
 		}
 
@@ -1235,20 +1239,26 @@ DROPEFFECT CDonutTabBar::OnDragOver(IDataObject *pDataObject, DWORD dwKeyState, 
 		if (m_bDragAccept == false) {
 			return DROPEFFECT_NONE;
 		}
-
+		
 		int nIndex = HitTest(point);
-		if (nIndex == -1)
+		if (nIndex == -1) {
+			_DrawInsertionEdge(htOutside, nIndex);
 			return DROPEFFECT_COPY;	// タブの上にいなかったので新規タブ
+		}
 		
 		if (dwKeyState & MK_CONTROL) {
+			_DrawInsertionEdge(htItem, nIndex);
 			return DROPEFFECT_COPY;
 		} else if (dwKeyState & MK_SHIFT) {
+			_DrawInsertionEdge(htItem, nIndex);
 			return DROPEFFECT_MOVE;
 		}
 
 		if (m_strDraggingDrive == GetItemFullPath(nIndex).Left(3)) {
+			_DrawInsertionEdge(htItem, nIndex);
 			return DROPEFFECT_MOVE;	// 同じドライブだったので移動
 		} else {
+			_DrawInsertionEdge(htItem, nIndex);
 			return DROPEFFECT_COPY;	// 違うドライブだったのでコピー
 		}
 	}
@@ -1282,8 +1292,15 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 					hr = ::SHCreateItemFromIDList(pidl, IID_IShellItem, (LPVOID*)&spShellItem);
 					if (hr == S_OK) {
 						SFGAOF	attribute;
-						spShellItem->GetAttributes(SFGAO_FOLDER, &attribute);
-						if (attribute == SFGAO_FOLDER) {
+						spShellItem->GetAttributes(SFGAO_FOLDER | SFGAO_LINK, &attribute);
+						if (attribute & SFGAO_LINK) {	// lnkなら解決する
+							LPITEMIDLIST	pidlLink = ShellWrap::GetResolveIDList(pidl);
+							if (pidlLink)
+								OnTabCreate(pidlLink, true);
+							else 
+								::CoTaskMemFree(pidl);
+
+						} else if (attribute & SFGAO_FOLDER) {
 							OnTabCreate(pidl, true);
 							continue;
 						}
@@ -1297,7 +1314,7 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 			} else {
 				ATLASSERT(FALSE);
 			}
-			
+			_ClearInsertionEdge();
 			return dropEffect;
 		}
 
@@ -1819,12 +1836,21 @@ void	CDonutTabBar::OnOpenOption(UINT uNotifyCode, int nID, CWindow wndCtl)
 	_UpdateLayout();
 }
 
-
+// 最近閉じたタブを復元する
 void	CDonutTabBar::OnClosedTabCreate(UINT uNotifyCode, int nID, CWindow wndCtl)
 {
 	int i = nID - ID_RECENTCLOSED_FIRST;
-	LPITEMIDLIST pidl = ::ILClone(m_vecHistoryItem[i].pidl);
-	OnTabCreate(pidl);
+	//LPITEMIDLIST pidl = ::ILClone(m_vecHistoryItem[i].pidl);
+	//int nIndex = OnTabCreate(pidl);
+	CTabItem	item;
+	item.m_pidl		= ::ILClone(m_vecHistoryItem[i].pidl);
+	item.m_strItem		= m_vecHistoryItem[i].strTitle;
+	item.m_strFullPath	= m_vecHistoryItem[i].strFullPath;
+	item.m_pTravelLogBack	= new TRAVELLOG(*m_vecHistoryItem[i].pLogBack);
+	item.m_pTravelLogFore	= new TRAVELLOG(*m_vecHistoryItem[i].pLogFore);
+	AddTabItem(item);
+
+	_DeleteHistory(i);
 }
 
 LRESULT CDonutTabBar::OnTooltipGetDispInfo(int idCtrl, LPNMHDR pnmh, BOOL& bHandled)
