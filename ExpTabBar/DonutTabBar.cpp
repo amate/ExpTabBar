@@ -1886,6 +1886,7 @@ void CDonutTabBar::_SaveSelectedIndex(int nIndex)
 
 void	CDonutTabBar::_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObject* pDataObject, bool bMove)
 {
+	::CoInitialize(NULL);
 	HRESULT	hr;
 	CComPtr<IShellItem>	pShellItemTo;	// 送り先
 	hr = ::SHCreateItemFromIDList(pidlTo, IID_PPV_ARGS(&pShellItemTo));
@@ -1904,6 +1905,7 @@ void	CDonutTabBar::_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObjec
 		}
 	}
 	pDataObject->Release();
+	::CoUninitialize();
 }
 
 /// 設定したクリックコマンドを実行する

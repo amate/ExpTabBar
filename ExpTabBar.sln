@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual C++ Express 2010
+# Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ExpTabBar", "ExpTabBar\ExpTabBar.vcxproj", "{7158FD40-539F-475E-909E-CB03CB0E0B3E}"
 	ProjectSection(ProjectDependencies) = postProject
 		{969AE102-6173-4EF7-854E-BD78D2B15B1F} = {969AE102-6173-4EF7-854E-BD78D2B15B1F}
@@ -38,8 +38,7 @@ Global
 		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Debug|X64.ActiveCfg = Debug|x64
 		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Debug|X64.Build.0 = Debug|x64
 		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Release|Win32.ActiveCfg = Release|Win32
-		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Release|Win32.Build.0 = Release|Win32
-		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Release|X64.ActiveCfg = Release|Win32
+		{969AE102-6173-4EF7-854E-BD78D2B15B1F}.Release|X64.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
