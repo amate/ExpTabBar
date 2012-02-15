@@ -1443,7 +1443,8 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 		}
 		m_bNavigateLockOpening = true;
 		_SaveSelectedIndex(nCurIndex);
-		SetCurSel(OnTabCreate(pidl));
+		int nIndex = OnTabCreate(pidl, false, false, true);	//　ミドルクリックで開いた扱いにする
+		SetCurSel(nIndex);
 		m_bNavigateLockOpening = false;
 		return;
 	}
@@ -1804,7 +1805,7 @@ void	CDonutTabBar::OnOpenUpFolder(UINT uNotifyCode, int nID, CWindow wndCtl)
 		LPITEMIDLIST pidl = ::ILClone(m_items[nIndex].m_pidl);
 		ILRemoveLastID(pidl);
 
-		m_nInsertIndex = nIndex + 1;
+		m_nInsertIndex = nIndex;
 		int nNewIndex = OnTabCreate(pidl, false, true);
 		SetCurSel(nNewIndex);
 		m_nInsertIndex = -1;
