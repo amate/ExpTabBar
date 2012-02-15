@@ -150,6 +150,9 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 			ATLASSERT(FALSE);
 			return E_FAIL;
 		}
+
+		m_wndTabBar.RefreshTab(_T(""));
+		
 	}
 
 	return S_OK;
