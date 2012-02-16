@@ -68,7 +68,8 @@ int		CTabCtrlImpl::_GetRequiredHeight()
 {
 	int size = GetItemCount();
 	if (size == 0) {
-		return GetItemHeight();
+		//return GetItemHeight();
+		return 0;
 	} else {
 //		return GetItem(size - 1).m_rcItem.bottom;
 		return GetItem(size - 1).m_rcItem.bottom + 1;

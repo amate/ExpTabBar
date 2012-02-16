@@ -40,7 +40,8 @@ HICON	CreateIconFromIDList(PCIDLIST_ABSOLUTE pidl)
 }
 
 
-/// フルパスからアイテムＩＤリストを作成する
+/// フルパスからアイテムIDリストを作成する
+/// 作成したアイテムIDリストはちゃんと解放すること！
 PIDLIST_ABSOLUTE CreateIDListFromFullPath(LPCTSTR strFullPath)
 {
 	LPITEMIDLIST pidl;

@@ -146,6 +146,9 @@
     <None Include="res\NavigateLock.ico">
       <Filter>リソース ファイル</Filter>
     </None>
+    <None Include="res\folder_open.ico">
+      <Filter>リソース ファイル</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Midl Include="ExpTabBar.idl">

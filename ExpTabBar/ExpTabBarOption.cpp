@@ -31,6 +31,7 @@ int		CTabBarConfig::s_RClickCommand		= SHOWMENU;
 int		CTabBarConfig::s_DblClickCommand	= TABCLOSE;
 int		CTabBarConfig::s_MClickCommand		= TABCLOSE;
 int		CTabBarConfig::s_nMaxHistoryCount	= 16;
+bool	CTabBarConfig::s_bMargeControlPanel = false;
 
 /// ê›íËÇì«Ç›çûÇﬁ
 void	CTabBarConfig::LoadConfig()
@@ -67,6 +68,8 @@ void	CTabBarConfig::LoadConfig()
 		s_MClickCommand		= value.get();
 	if (auto value = pt.get_optional<int>("Tab.MaxHistoryCount"))
 		s_nMaxHistoryCount	= value.get();
+	if (auto value = pt.get_optional<bool>("Tab.MargeControlPanel"))
+		s_bMargeControlPanel = value.get();
 }
 
 /// ê›íËÇï€ë∂Ç∑ÇÈ
@@ -89,6 +92,7 @@ void	CTabBarConfig::SaveConfig()
 	pt.put("Tab.DblClickCommand"	, s_DblClickCommand);
 	pt.put("Tab.MClickCommand"		, s_MClickCommand);
 	pt.put("Tab.MaxHistoryCount"	, s_nMaxHistoryCount);
+	pt.put("Tab.MargeControlPanel"	, s_bMargeControlPanel);
 
 	write_ini(inistream, pt);
 }
@@ -124,6 +128,7 @@ public:
 		DDX_INT_RANGE(IDC_EDIT_FIXED_Y			, (int&)s_FixedSize.cy	, 10, 500)
 		DDX_INT_RANGE(IDC_EDIT_MAXTEXTLENGTH	, s_nMaxTextLength	, 10, 125)
 		DDX_INT_RANGE(IDC_EDIT_MAXHISTORYCOUNT	, s_nMaxHistoryCount,  1,  50)
+		DDX_CHECK(IDC_CHECK_MARGECONTROLPANEL	, s_bMargeControlPanel	)
     END_DDX_MAP()
 	
 

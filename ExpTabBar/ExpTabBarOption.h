@@ -52,6 +52,7 @@ public:
 	static int		s_DblClickCommand;
 	static int		s_MClickCommand;
 	static int		s_nMaxHistoryCount;
+	static bool		s_bMargeControlPanel;
 	
 	static void	LoadConfig();
 	static void	SaveConfig();

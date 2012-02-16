@@ -332,6 +332,7 @@
     <None Include="ExpTabBar.def" />
     <None Include="ExpTabBar.rgs" />
     <None Include="ReadMe.txt" />
+    <None Include="res\folder_open.ico" />
     <None Include="res\NavigateLock.ico" />
   </ItemGroup>
   <ItemGroup>

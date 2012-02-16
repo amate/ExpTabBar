@@ -73,6 +73,7 @@ public:
 
 	void	NavigateLockTab(int nIndex, bool bOn);
 
+	void	ExternalOpen(LPITEMIDLIST pidl);
 	void	ExternalOpen(LPCTSTR strFullPath);
 
 	// overrides

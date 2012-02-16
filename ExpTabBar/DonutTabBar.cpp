@@ -2,6 +2,7 @@
 
 #include "stdafx.h"
 #include "DonutTabBar.h"
+#include <atlenc.h>
 #include <UIAutomation.h>
 #include <boost/thread.hpp>
 #include "ShellWrap.h"
@@ -23,8 +24,14 @@ CNotifyWindow::CNotifyWindow(CDonutTabBar* p)
 /// 外部からタブを開く
 BOOL CNotifyWindow::OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct)
 {
+#if 0
 	LPCTSTR strFullPath = (LPCTSTR)pCopyDataStruct->lpData;
-	m_pTabBar->ExternalOpen(strFullPath);
+#endif
+	LPITEMIDLIST pidl = (LPITEMIDLIST)pCopyDataStruct->lpData;
+	if (pidl == NULL)
+		return FALSE;
+
+	m_pTabBar->ExternalOpen(::ILClone(pidl));
 	return TRUE;
 }
 
@@ -234,6 +241,8 @@ void	CDonutTabBar::RestoreAllTab()
 									}
 									if (xmlRead.MoveToNextAttribute()) {
 										std::wstring strBinary = xmlRead.GetValue();
+										if (strBinary.empty())
+											continue;
 										LPBYTE pabID = GetByteArrayFromBinary(nSize, strBinary);
 										vecIDList.push_back(std::make_pair(nSize, pabID));
 									}
@@ -1090,11 +1099,10 @@ void	CDonutTabBar::NavigateLockTab(int nIndex, bool bOn)
 	InvalidateRect(item.m_rcItem, FALSE);
 }
 
-void	CDonutTabBar::ExternalOpen(LPCTSTR strFullPath)
+
+void	CDonutTabBar::ExternalOpen(LPITEMIDLIST pidl)
 {
 	Misc::SetForegroundWindow(GetTopLevelWindow());
-	LPITEMIDLIST pidl = CreateIDListFromFullPath(strFullPath);
-	
 	int nIndex = _IDListIsEqualIndex(pidl);
 	if (nIndex != -1) {					
 		if (nIndex != GetCurSel()) {		/* すでに開いてるタブがあればそっちに移動する */
@@ -1104,6 +1112,12 @@ void	CDonutTabBar::ExternalOpen(LPCTSTR strFullPath)
 	} else {
 		SetCurSel(OnTabCreate(pidl));
 	}
+}
+
+void	CDonutTabBar::ExternalOpen(LPCTSTR strFullPath)
+{
+	LPITEMIDLIST pidl = CreateIDListFromFullPath(strFullPath);
+	ExternalOpen(pidl);
 }
 
 
@@ -1295,10 +1309,10 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 						spShellItem->GetAttributes(SFGAO_FOLDER | SFGAO_LINK, &attribute);
 						if (attribute & SFGAO_LINK) {	// lnkなら解決する
 							LPITEMIDLIST	pidlLink = ShellWrap::GetResolveIDList(pidl);
-							if (pidlLink)
+							if (pidlLink) {
 								OnTabCreate(pidlLink, true);
-							else 
-								::CoTaskMemFree(pidl);
+							}
+							::CoTaskMemFree(pidl);
 
 						} else if (attribute & SFGAO_FOLDER) {
 							OnTabCreate(pidl, true);
@@ -1379,15 +1393,31 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 		HWND hWndTarget = FindWindow(_T("ExpTabBar_NotifyWindow"), NULL);
 		if (hWndTarget != NULL) {	/* 他にもエクスプローラーが起動している */			
 			m_bSaveAllTab = false;
+			CString strFullPath = GetFullPathFromIDList(pidl);
+			if (   strFullPath.Left(5)  == _T("検索結果&")
+				|| (CTabBarConfig::s_bMargeControlPanel == false 
+				   && strFullPath.Left(40) == _T("::{26EE0668-A00A-44D7-9371-BEB064C98683}"))) 
+			{
+				_RefreshBandInfo();
+				::CoTaskMemFree(pidl);
+				return ;	// 検索結果表示は別ウィンドウにする
+			}
+
 			// 他のエクスプローラーにpidlが開かれたことを通知する
 			COPYDATASTRUCT	cd = { 0 };
-			CString strFullPath = GetFullPathFromIDList(pidl);
+#if 0
+			CString strFullPath = GetFullPathFromIDList(pidl);			
+			Base64EncodeGetRequiredLength
 			cd.lpData = (LPVOID)(LPCTSTR)strFullPath;
 			cd.cbData = strFullPath.GetLength() * sizeof(TCHAR) + sizeof(TCHAR);
+#endif
+			UINT cbItemID = ::ILGetSize(pidl);
+			cd.lpData	= (LPVOID)pidl;
+			cd.cbData	= cbItemID;
 			SendMessage(hWndTarget, WM_COPYDATA, NULL, (LPARAM)&cd);
 			::CoTaskMemFree(pidl);
 
-			SendMessage(GetTopLevelWindow(), WM_CLOSE, 0, 0);
+			::PostMessage(GetTopLevelWindow(), WM_CLOSE, 0, 0);
 /*
 			DWORD	dwProcessID = 0;
 			GetWindowThreadProcessId(GetTopLevelWindow(), &dwProcessID);
@@ -1396,22 +1426,23 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 			ATLASSERT(h == NULL);
 			::TerminateProcess(h, 0);*/
 			return;
+		} else {	// 他のエクスプローラーはない
+
+			// 通知を受け取るためのウィンドウを作る
+			HWND hWndNotify = m_wndNotify.CreateEx(NULL);
+
+			RestoreAllTab();	// タブを復元する
+			/* 復元したタブと同じタブが開かれるかどうか */
+			int nIndex = _IDListIsEqualIndex(pidl);
+			if (nIndex != -1) {
+				nCurIndex = nIndex;	// 同じタブがあった
+			} else {
+				nCurIndex = OnTabCreate(pidl, true);
+			}
+
+			SetCurSel(nCurIndex);
+			return;
 		}
-
-		// 通知を受け取るためのウィンドウを作る
-		HWND hWndNotify = m_wndNotify.CreateEx(NULL);
-
-		RestoreAllTab();	// タブを復元する
-		/* 復元したタブと同じタブが開かれるかどうか */
-		int nIndex = _IDListIsEqualIndex(pidl);
-		if (nIndex != -1) {
-			nCurIndex = nIndex;	// 同じタブがあった
-		} else {
-			nCurIndex = OnTabCreate(pidl, true);
-		}
-
-		SetCurSel(nCurIndex);
-		return;
 	}
 
 	/* すでに開いてるタブがあればそっちに移動する */
