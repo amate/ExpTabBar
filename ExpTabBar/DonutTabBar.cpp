@@ -612,21 +612,11 @@ bool	CDonutTabBar::_SaveTravelLog(int nIndex)
 	if (_IsValidIndex(nIndex) == false) {
 		return false;
 	}
-
-	HRESULT	hr;
-	for (int i = 0; i < 2; ++i) {
-		BOOL	bFore;
-		int		nDir;
-		if (i == 0) {
-			bFore	= TRUE;
-			nDir	= TLEF_RELATIVE_FORE;
-		} else {
-			bFore	= FALSE;
-			nDir	= TLEF_RELATIVE_BACK;
-		}
-
+	
+	auto funcSaveTravelLog = [&](BOOL bFore, TLENUMF flags) -> bool {
+		HRESULT	hr = S_OK;
 		CComPtr<IEnumTravelLogEntry>	pTLEnum;
-		hr = m_spTravelLogStg->EnumEntries(nDir, &pTLEnum);
+		hr = m_spTravelLogStg->EnumEntries(flags, &pTLEnum);
 		if (hr != S_OK || pTLEnum == NULL) {
 			ATLASSERT(FALSE);
 			return false;
@@ -670,7 +660,14 @@ bool	CDonutTabBar::_SaveTravelLog(int nIndex)
 		} else {
 			GetItem(nIndex).m_pTravelLogBack = arrLog;
 		}
-	}
+		return true;
+	};
+
+	if (!funcSaveTravelLog(TRUE	, TLEF_RELATIVE_FORE))
+		return false;
+	if (!funcSaveTravelLog(FALSE, TLEF_RELATIVE_BACK))
+		return false;
+
 	return true;
 }
 
@@ -1130,7 +1127,7 @@ void	CDonutTabBar::OnSetCurSel(int nIndex, int nOldIndex)
 //		SaveItemIndex(nOldIndex);
 		
 		if (m_bNavigateLockOpening) {
-			_RemoveOneBackLog();
+			//_RemoveOneBackLog();
 		}
 		/* トラベルログを保存 */
 		_SaveTravelLog(nOldIndex);
@@ -1450,10 +1447,12 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 	if (nIndex != -1 && nIndex != nCurIndex) {
 		m_bNavigateLockOpening = true;
 		_SaveSelectedIndex(nCurIndex);
+		_RemoveOneBackLog();
+		_AddHistory(nCurIndex);	// 最近閉じたタブに追加する
+
 		SetCurSel(nIndex);
-		if ((GetItemState(nCurIndex) & TCISTATE_NAVIGATELOCK) == 0) {
-			DeleteItem(nCurIndex);	// ナビゲートロックされていないので削除する
-		}
+
+		DeleteItem(nCurIndex);	// 削除する
 		m_bNavigateLockOpening = false;
 		return;
 	}
@@ -1474,6 +1473,7 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 		}
 		m_bNavigateLockOpening = true;
 		_SaveSelectedIndex(nCurIndex);
+		_RemoveOneBackLog();
 		int nIndex = OnTabCreate(pidl, false, false, true);	//　ミドルクリックで開いた扱いにする
 		SetCurSel(nIndex);
 		m_bNavigateLockOpening = false;
