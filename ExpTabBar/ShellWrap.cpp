@@ -84,31 +84,23 @@ CString GetNameFromIDList(PCIDLIST_ABSOLUTE pidl)
 /// 現在エクスプローラーで表示中のフォルダのアイテムＩＤリストを作成する
 PIDLIST_ABSOLUTE GetCurIDList(IShellBrowser* pShellBrowser)
 {
-	try {
-		PIDLIST_ABSOLUTE	pidl;
-		HRESULT	hr;
-		CComPtr<IShellView>	pShellView;
-		CComQIPtr<IFolderView>	pFolderView;
-		CComQIPtr<IPersistFolder2>	pPersistFolder2;
-		hr = pShellBrowser->QueryActiveShellView(&pShellView);
-		if (hr == S_OK) {
-			pPersistFolder2 = pFolderView = pShellView;
-			hr = pFolderView->GetFolder(IID_IPersistFolder2, (void**)&pPersistFolder2);
+	PIDLIST_ABSOLUTE	pidl;
+	HRESULT	hr;
+	CComPtr<IShellView>	pShellView;
+	CComQIPtr<IFolderView>	pFolderView;
+	CComQIPtr<IPersistFolder2>	pPersistFolder2;
+	hr = pShellBrowser->QueryActiveShellView(&pShellView);
+	pFolderView = pShellView;
+	if (hr == S_OK && pFolderView) {
+		hr = pFolderView->GetFolder(IID_IPersistFolder2, (void**)&pPersistFolder2);
+		if (hr == S_OK && pPersistFolder2) {
+			hr = pPersistFolder2->GetCurFolder(&pidl);
 			if (hr == S_OK) {
-				hr = pPersistFolder2->GetCurFolder(&pidl);
-				if (hr == S_OK) {
-					return pidl;
-				}
+				return pidl;
 			}
 		}
-//		throw AtlThrow(hr);
 	}
-//	catch (AtlException &) {
-//		MessageBox(_T("AtlException"));
-//	}
-	catch (...) {
-		ATLASSERT(FALSE);
-	}
+
 	return NULL;
 }
 

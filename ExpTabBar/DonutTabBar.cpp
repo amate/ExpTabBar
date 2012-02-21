@@ -1381,6 +1381,9 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 
 	LPITEMIDLIST	pidl = GetCurIDList(m_spShellBrowser);
 	if (pidl == NULL) {
+		/* タブ名を変更 */
+		if (GetCurSel() != -1)
+			SetItemText(GetCurSel(), title);	// Windows\assembly フォルダとかで必要
 		return;		// 現在のフォルダのアイテムＩＤリストが取得できなかった
 	}
 
