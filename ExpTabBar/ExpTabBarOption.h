@@ -58,6 +58,22 @@ public:
 	static void	SaveConfig();
 };
 
+//////////////////////////////////////////
+// サムネイルツールチップの設定
+
+class CThumbnailTooltipConfig
+{
+public:
+	static bool		s_bUseThumbnailTooltip;
+	static CSize	s_MaxThumbnailSize;	
+	static int		s_nMaxThumbnailCache;
+
+	static bool		s_bMaxThumbnailSizeChanged;
+
+	static void	LoadConfig();
+	static void SaveConfig();
+
+};
 
 ///////////////////////////////////////////////////////////
 ///  オプションダイアログ

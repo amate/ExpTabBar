@@ -28,6 +28,11 @@ CString GetNameFromIDList(PCIDLIST_ABSOLUTE pidl);
 /// 現在エクスプローラーで表示中のフォルダのアイテムＩＤリストを作成する
 PIDLIST_ABSOLUTE GetCurIDList(IShellBrowser* pShellBrowser);
 
+/// 現在表示中のビューの nIndex にあるアイテムのpidlを得る
+PIDLIST_ABSOLUTE GetIDListByIndex(IShellBrowser* pShellBrowser, int nIndex);
+
+/// path のInfoTipTextを取得します
+CString GetInfoTipText(LPCTSTR path);
 
 /// lnkのリンク先を返します
 PIDLIST_ABSOLUTE GetResolveIDList(PIDLIST_ABSOLUTE pidl);

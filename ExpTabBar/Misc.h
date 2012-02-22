@@ -35,6 +35,9 @@ const CString GetExeDirectory();
 // exeのあるフォルダを返す(最後に \ が付かない)
 const CString GetExeDirName();
 
+/// path から拡張子を得る('.'は含まれず)
+CString GetPathExtention(const CString& path);
+
 
 // UTF8文字列をwcs(UTF16LE)文字列に変換
 const std::vector<wchar_t> utf8_to_wcs(const char* pUtf8);

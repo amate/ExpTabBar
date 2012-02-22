@@ -2,18 +2,27 @@
 
 #include "stdafx.h"
 #include "ExpTabBand.h"
-#include <UIAutomation.h>
 #include <boost/lexical_cast.hpp>
 #include "ShellWrap.h"
-
-
+#include "GdiplusUtil.h"
 
 // コンストラクタ/デストラクタ
-CExpTabBand::CExpTabBand() : m_bNavigateCompleted(false), m_wndShellView(this, 1)
-{	}
+CExpTabBand::CExpTabBand() : 
+	m_bNavigateCompleted(false), 
+	m_wndShellView(this, 1), 
+	m_wndListView(this, 2),
+	m_wndDirectUI(this, 3),
+	m_nIndexTooltip(-1),
+	m_bNowTrackMouseLeave(false),
+	m_bNowTrackMouseHover(false)
+{
+	GdiplusInit();
+}
 
 CExpTabBand::~CExpTabBand()
 {
+	GdiplusTerm();
+
 	DispEventUnadvise(m_spWebBrowser2);
 }
 
@@ -152,7 +161,15 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		}
 
 		m_wndTabBar.RefreshTab(_T(""));
-		
+
+		HRESULT	hr;
+		hr = ::CoCreateInstance(__uuidof(CUIAutomation), NULL, CLSCTX_INPROC_SERVER, __uuidof(IUIAutomation), (void**)&m_spUIAutomation);
+		ATLASSERT(m_spUIAutomation);
+
+		/* サムネイルツールチップ作成 */
+		m_ThumbnailTooltip.Create(NULL, rcDefault, NULL, WS_POPUP, WS_EX_TOOLWINDOW |  WS_EX_LAYERED | WS_EX_TRANSPARENT);
+		ATLASSERT( m_ThumbnailTooltip.IsWindow() );		
+		SetLayeredWindowAttributes(m_ThumbnailTooltip.m_hWnd, 0, 255, LWA_ALPHA);
 	}
 
 	return S_OK;
@@ -183,6 +200,10 @@ void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
 
 		if (m_wndShellView.m_hWnd)
 			m_wndShellView.UnsubclassWindow(TRUE);
+		if (m_wndListView.m_hWnd)
+			m_wndListView.UnsubclassWindow(TRUE);
+		if (m_wndDirectUI.m_hWnd)
+			m_wndDirectUI.UnsubclassWindow(TRUE);
 
 		HWND hWnd;
 		CComPtr<IShellView>	spShellView;
@@ -192,6 +213,19 @@ void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
 			if (SUCCEEDED(hr)) {
 				m_wndShellView.SubclassWindow(hWnd);
 				m_ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
+				if (m_ListView.m_hWnd) {
+					m_wndListView.SubclassWindow(m_ListView);
+
+					_TrackMouseLeave(m_ListView);
+					_TrackMouseHover(m_ListView);
+				} else {
+					HWND hWndDirectUI = ::FindWindowEx(hWnd, NULL, _T("DirectUIHWND"), NULL);
+					if (hWndDirectUI) {
+						m_wndDirectUI.SubclassWindow(hWndDirectUI);
+						_TrackMouseLeave(hWndDirectUI);
+						_TrackMouseHover(hWndDirectUI);
+					}
+				}
 			}
 		}
 	}
@@ -223,95 +257,92 @@ LRESULT CExpTabBand::OnListViewItemChanged(LPNMHDR pnmh)
 	return 0;
 }
 
+LRESULT CExpTabBand::OnListViewGetDispInfo(LPNMHDR pnmh)
+{
+	SetMsgHandled(FALSE);
+
+	CRect rcItem;
+	int nIndex = -1;
+	if (m_ListView.m_hWnd) {
+		nIndex = _HitTestListView();
+		if (nIndex != -1)
+			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
+	} else if (m_wndDirectUI.m_hWnd) {	
+		nIndex = _HitTestDirectUI(rcItem);
+	}
+
+	if (nIndex != -1 && m_nIndexTooltip != nIndex) {
+		m_Tooltip = pnmh->hwndFrom;
+		_ShowThumbnailTooltip(nIndex, rcItem);
+	}
+
+	return 0;
+}
+
+void	CExpTabBand::OnListViewMouseMove(UINT nFlags, CPoint point)
+{
+	SetMsgHandled(FALSE);
+
+	bool bListView = m_ListView.m_hWnd != NULL;
+	if (m_bNowTrackMouseLeave == false)
+		_TrackMouseLeave(bListView ? m_ListView.m_hWnd : m_wndDirectUI.m_hWnd);
+	if (m_bNowTrackMouseHover == false)
+		_TrackMouseHover(bListView ? m_ListView.m_hWnd : m_wndDirectUI.m_hWnd);
+
+	if (m_ThumbnailTooltip.IsWindowVisible()) {
+		CRect rcItem;
+		int nIndex = bListView ? _HitTestListView() : _HitTestDirectUI(rcItem);
+		if (nIndex != -1 && m_nIndexTooltip != nIndex) {
+			if (bListView) {
+				m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
+			}
+			if (_ShowThumbnailTooltip(nIndex, rcItem)) {
+				return ;
+			} else {
+				_HideThumbnailTooltip();
+			}
+		} else if (nIndex == -1) {
+			_HideThumbnailTooltip();
+		}
+	}
+
+	//if (m_Tooltip.IsWindow())
+	//	m_Tooltip.Activate(TRUE);
+}
+
+
+void	CExpTabBand::OnListViewMouseLeave()
+{
+	m_bNowTrackMouseLeave = false;
+
+	_HideThumbnailTooltip();
+}
+
+void	CExpTabBand::OnListViewMouseHover(WPARAM wParam, CPoint ptPos)
+{
+	m_bNowTrackMouseHover = false;
+
+	CRect rcItem;
+	int nIndex = -1;
+	if (m_ListView.m_hWnd) {
+		nIndex = _HitTestListView();
+		if (nIndex != -1)
+			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
+	} else if (m_wndDirectUI.m_hWnd) {	
+		nIndex = _HitTestDirectUI(rcItem);
+	}
+
+	if (nIndex != -1 && m_nIndexTooltip != nIndex) {
+		_ShowThumbnailTooltip(nIndex, rcItem);
+	}
+}
+
+
 /// フォルダーをミドルクリックで新しいタブで開く
 void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 {
 	if (message == WM_MBUTTONDOWN) {
-		int nIndex = -1;
-		if (m_ListView.m_hWnd) {
-			POINT pt;
-			::GetCursorPos(&pt);
-			m_ListView.ScreenToClient(&pt);
-			UINT Flags;
-			nIndex = m_ListView.HitTest(pt, &Flags);
-		} else {
-			HRESULT	hr;
-			CComPtr<IUIAutomation>	spUIAutomation;
-			hr = ::CoCreateInstance(__uuidof(CUIAutomation), NULL, CLSCTX_INPROC_SERVER, __uuidof(IUIAutomation), (void**)&spUIAutomation);
-			ATLASSERT(spUIAutomation);
-
-			CComPtr<IUIAutomationElement>	spShellViewElement;
-			hr = spUIAutomation->ElementFromHandle(m_wndShellView, &spShellViewElement);
-			if (FAILED(hr))
-				return ;
-
-
-			CComVariant	vProp(UIA_ListItemControlTypeId);
-			CComPtr<IUIAutomationCondition>	spCondition;
-			hr = spUIAutomation->CreatePropertyCondition(UIA_ControlTypePropertyId, vProp, &spCondition);
-			if (FAILED(hr)) 
-				return ;
-
-			CComPtr<IUIAutomationElementArray>	spUIElementArray;
-			hr = spShellViewElement->FindAll(TreeScope_Descendants, spCondition, &spUIElementArray);
-			if (FAILED(hr) || spUIElementArray == nullptr)
-				return ;
-
-			POINT	pt;
-			::GetCursorPos(&pt);
-			
-			int nCount = 0;
-			spUIElementArray->get_Length(&nCount);
-			for (int i = 0; i < nCount; ++i) {
-				CComPtr<IUIAutomationElement>	spUIElm;
-				spUIElementArray->GetElement(i, &spUIElm);
-				BOOL	bOffScreen = FALSE;
-				spUIElm->get_CurrentIsOffscreen(&bOffScreen);
-				if (bOffScreen)
-					continue;
-				CRect rcItem;
-				spUIElm->get_CurrentBoundingRectangle(&rcItem);
-				if (rcItem.PtInRect(pt)) {	// 見つかった
-					nIndex = i;
-					break;
-				}
-			}
-
-#if 0	//\\ こっちはちょっと問題がある
-			POINT pt;
-			::GetCursorPos(&pt);
-			CComPtr<IUIAutomationElement>	spPointedElement;
-			hr = spUIAutomation->ElementFromPoint(pt, &spPointedElement);
-			if (FAILED(hr))
-				return ;
-			
-			CComPtr<IUIAutomationElement>	spItemUIElement;	
-
-			CComBSTR	strPointedClassName;
-			spPointedElement->get_CurrentClassName(&strPointedClassName);
-			if (strPointedClassName == nullptr || strPointedClassName != L"UIItem") {
-				CComPtr<IUIAutomationTreeWalker>	spWalker;
-				spUIAutomation->get_ControlViewWalker(&spWalker);
-				if (spWalker == nullptr)
-					return ;
-				
-				spWalker->GetParentElement(spPointedElement, &spItemUIElement);
-				if (spItemUIElement == nullptr)
-					return ;
-				CComBSTR	strClassName;
-				spItemUIElement->get_CurrentClassName(&strClassName);
-				if (strClassName == nullptr || strClassName != L"UIItem")
-					return;
-			} else 
-				spItemUIElement = spPointedElement;
-
-			CComBSTR	strID;
-			spItemUIElement->get_CurrentAutomationId(&strID);
-			if (strID)
-				nIndex = boost::lexical_cast<int>((LPCTSTR)CString(strID));
-#endif
-		}
-
+		int nIndex = _HitTestListView();
 		if (nIndex == -1)
 			return ;
 
@@ -356,11 +387,145 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 	}
 }
 
+int		CExpTabBand::_HitTestDirectUI(CRect& rcItem)
+{
+	if (m_wndDirectUI.m_hWnd) {
+		HRESULT	hr;
+		CComPtr<IUIAutomationElement>	spShellViewElement;
+		hr = m_spUIAutomation->ElementFromHandle(m_wndShellView, &spShellViewElement);
+		if (FAILED(hr))
+			return -1;
 
+		CComVariant	vProp(UIA_ListItemControlTypeId);
+		CComPtr<IUIAutomationCondition>	spCondition;
+		hr = m_spUIAutomation->CreatePropertyCondition(UIA_ControlTypePropertyId, vProp, &spCondition);
+		if (FAILED(hr)) 
+			return -1;
 
+		CComPtr<IUIAutomationElementArray>	spUIElementArray;
+		hr = spShellViewElement->FindAll(TreeScope_Descendants, spCondition, &spUIElementArray);
+		if (FAILED(hr) || spUIElementArray == nullptr)
+			return -1;
 
+		POINT	pt;
+		::GetCursorPos(&pt);
+		
+		int nIndex = -1;
+		int nCount = 0;
+		spUIElementArray->get_Length(&nCount);
+		for (int i = 0; i < nCount; ++i) {
+			CComPtr<IUIAutomationElement>	spUIElm;
+			spUIElementArray->GetElement(i, &spUIElm);
+			BOOL	bOffScreen = FALSE;
+			spUIElm->get_CurrentIsOffscreen(&bOffScreen);
+			if (bOffScreen)
+				continue;
+			CRect rcUIItem;
+			spUIElm->get_CurrentBoundingRectangle(&rcUIItem);
+			if (rcUIItem.PtInRect(pt)) {	// 見つかった
+				nIndex = i;
 
+				CComBSTR strItemNameDisplay = L"System.ItemNameDisplay";
+				CComVariant	vProp(strItemNameDisplay);
+				CComPtr<IUIAutomationCondition>	spCondition1;
+				m_spUIAutomation->CreatePropertyCondition(UIA_AutomationIdPropertyId, vProp, &spCondition1);
+				if (spCondition1) {
+					CComPtr<IUIAutomationElement>	spUIItenNameElm;
+					spUIElm->FindFirst(TreeScope_Children, spCondition1, &spUIItenNameElm);
+					if (spUIItenNameElm) {
+						spUIItenNameElm->get_CurrentBoundingRectangle(&rcItem);
+						m_wndDirectUI.ScreenToClient(&rcItem);
+					}
+				}
+				break;
+			}
+		}
+		return nIndex;
+	}
+	return -1;
+}
 
+int		CExpTabBand::_HitTestListView(const CPoint& pt)
+{
+	if (m_ListView.m_hWnd) {
+		UINT Flags;
+		int nIndex = m_ListView.HitTest(pt, &Flags);
+		return nIndex;
+	} else if (m_wndDirectUI.m_hWnd) {
+		CRect rcItem;
+		return _HitTestDirectUI(rcItem);
+	}
+	return -1;
+}
 
+int		CExpTabBand::_HitTestListView()
+{
+	CPoint pt;
+	::GetCursorPos(&pt);
+	if (m_ListView.m_hWnd) {		
+		m_ListView.ScreenToClient(&pt);
+	} else if (m_wndDirectUI.m_hWnd) {
+		m_wndDirectUI.ScreenToClient(&pt);
+	} else {
+		return -1;
+	}
+
+	return _HitTestListView(pt);
+
+}
+
+bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem)
+{
+	//SetLayeredWindowAttributes(m_pThumbnailTooltip->m_hWnd, 0, 255, LWA_ALPHA);
+	//m_pThumbnailTooltip->ShowWindow(TRUE);
+
+	LPITEMIDLIST pidl = ShellWrap::GetIDListByIndex(m_spShellBrowser, nIndex);
+	if (pidl == nullptr)
+		return false;
+
+	CString path = ShellWrap::GetFullPathFromIDList(pidl);
+	CString strExt = Misc::GetPathExtention(path);
+	strExt.MakeLower();
+	if (strExt == _T("jpg") || strExt == _T("jpeg") || strExt == _T("png") || strExt == _T("gif") || strExt == _T("bmp"))
+	{
+		m_nIndexTooltip = nIndex;
+		m_wndShellView.ClientToScreen(&rcItem);
+		bool bShow = m_ThumbnailTooltip.ShowThumbnailTooltip((LPCWSTR)path, rcItem);
+		if (bShow) {
+			if (m_Tooltip.IsWindow()) {
+				m_Tooltip.Activate(FALSE);
+			}
+		}
+		return bShow;
+	}
+	return false;
+}
+
+void	CExpTabBand::_HideThumbnailTooltip()
+{
+	m_ThumbnailTooltip.HideThumbnailTooltip();
+	m_nIndexTooltip = -1;
+	if (m_Tooltip.IsWindow())
+		m_Tooltip.Activate(TRUE);
+}
+
+void	CExpTabBand::_TrackMouseLeave(HWND hWnd)
+{
+	TRACKMOUSEEVENT tme = { sizeof(TRACKMOUSEEVENT) };
+	tme.hwndTrack = hWnd;
+	tme.dwFlags	= TME_LEAVE;
+	::TrackMouseEvent(&tme);
+	m_bNowTrackMouseLeave = true;
+}
+
+void	CExpTabBand::_TrackMouseHover(HWND hWnd)
+{
+	TRACKMOUSEEVENT tme = { sizeof(TRACKMOUSEEVENT) };
+	tme.hwndTrack = hWnd;
+	tme.dwFlags	= TME_HOVER;
+	tme.dwHoverTime	= HOVER_DEFAULT;
+	::TrackMouseEvent(&tme);
+	m_bNowTrackMouseHover = true;
+}
 
 

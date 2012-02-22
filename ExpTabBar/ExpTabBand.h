@@ -5,11 +5,11 @@
 #include "resource.h"       // ÉÅÉCÉì ÉVÉìÉ{Éã
 #include <comsvcs.h>
 #include <exdispid.h>
-
+#include <UIAutomation.h>
 //#include "ReflectionWnd.h"
 #include "DonutTabBar.h"
-
-
+#include "ThumbnailTooltip.h"
+#include "ExpTabBarOption.h"
 
 #define SINKID_EVENTS	1234
 
@@ -59,7 +59,22 @@ END_SINK_MAP()
 BEGIN_MSG_MAP(CExpTabBand)
 ALT_MSG_MAP(1)
 	NOTIFY_CODE_HANDLER_EX(LVN_ITEMCHANGED, OnListViewItemChanged)
+	//NOTIFY_CODE_HANDLER_EX(TTN_SHOW, OnListViewGetDispInfo)
 	MSG_WM_PARENTNOTIFY( OnParentNotify )
+ALT_MSG_MAP(2)
+	if (CThumbnailTooltipConfig::s_bUseThumbnailTooltip) {
+		NOTIFY_CODE_HANDLER_EX(TTN_GETDISPINFOW, OnListViewGetDispInfo)
+		MSG_WM_MOUSEMOVE( OnListViewMouseMove )
+		MSG_WM_MOUSELEAVE( OnListViewMouseLeave )
+		MSG_WM_MOUSEHOVER( OnListViewMouseHover )
+	}
+ALT_MSG_MAP(3)
+	if (CThumbnailTooltipConfig::s_bUseThumbnailTooltip) {
+		NOTIFY_CODE_HANDLER_EX(TTN_NEEDTEXTW, OnListViewGetDispInfo)
+		MSG_WM_MOUSEMOVE( OnListViewMouseMove )
+		MSG_WM_MOUSELEAVE( OnListViewMouseLeave )
+		MSG_WM_MOUSEHOVER( OnListViewMouseHover )
+	}
 END_MSG_MAP()
 
 	BOOL IsMsgHandled() const { return FALSE; }	//
@@ -92,19 +107,42 @@ public:
 
 
 	LRESULT OnListViewItemChanged(LPNMHDR pnmh);
+	LRESULT OnListViewGetDispInfo(LPNMHDR pnmh);
+	void	OnListViewMouseMove(UINT nFlags, CPoint point);
+	void	OnListViewMouseLeave();
+	void	OnListViewMouseHover(WPARAM wParam, CPoint ptPos);
+
 	void	OnParentNotify(UINT message, UINT nChildID, LPARAM lParam);
 
 private:
+	int		_HitTestDirectUI(CRect& rcItem);
+	int		_HitTestListView(const CPoint& pt);
+	int		_HitTestListView();
+	bool	_ShowThumbnailTooltip(int nIndex, CRect rcItem);
+	void	_HideThumbnailTooltip();
+	void	_TrackMouseLeave(HWND hWnd);
+	void	_TrackMouseHover(HWND hWnd);
+
 	// Data members
 	CDonutTabBar	m_wndTabBar;
 
 	CComPtr<IShellBrowser>	m_spShellBrowser;
 	CComPtr<ITravelLogStg>	m_spTravelLogStg;
 	CComPtr<IWebBrowser2>	m_spWebBrowser2;
+	CComPtr<IUIAutomation>	m_spUIAutomation;
 
 	bool	m_bNavigateCompleted;
 	CContainedWindow	m_wndShellView;
+	CContainedWindow	m_wndListView;
+	CContainedWindow	m_wndDirectUI;
+
 	CListViewCtrl		m_ListView;
+	CToolTipCtrl		m_Tooltip;
+	int		m_nIndexTooltip;
+	bool	m_bNowTrackMouseLeave;
+	bool	m_bNowTrackMouseHover;
+
+	CThumbnailTooltip	m_ThumbnailTooltip;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(ExpTabBand), CExpTabBand)

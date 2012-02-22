@@ -76,7 +76,9 @@ void	CTabBarConfig::LoadConfig()
 void	CTabBarConfig::SaveConfig()
 {
 	ptree pt;
-	std::ofstream	inistream(g_szIniFileName);
+	std::ifstream	inistream(g_szIniFileName);
+	read_ini(inistream, pt);
+	inistream.close();
 
 	pt.put("Tab.AddPos"				, s_nAddPos);
 	pt.put("Tab.LeftActiveOnClose"	, s_bLeftActiveOnClose);
@@ -94,7 +96,9 @@ void	CTabBarConfig::SaveConfig()
 	pt.put("Tab.MaxHistoryCount"	, s_nMaxHistoryCount);
 	pt.put("Tab.MargeControlPanel"	, s_bMargeControlPanel);
 
-	write_ini(inistream, pt);
+	std::ofstream iniostream(g_szIniFileName, std::ios::out | std::ios::trunc);
+	write_ini(iniostream, pt);
+	iniostream.close();
 }
 
 
@@ -207,10 +211,110 @@ private:
 	CComboBox	m_cmbMClick;
 };
 
+//////////////////////////////////////////
+// サムネイルツールチップの設定
+
+// 定義
+bool	CThumbnailTooltipConfig::s_bUseThumbnailTooltip = false;
+CSize	CThumbnailTooltipConfig::s_MaxThumbnailSize(512, 256);
+int		CThumbnailTooltipConfig::s_nMaxThumbnailCache = 64;
+
+bool	CThumbnailTooltipConfig::s_bMaxThumbnailSizeChanged = false;
+
+void CThumbnailTooltipConfig::LoadConfig()
+{
+	ptree pt;
+	std::ifstream	inistream(g_szIniFileName);
+	read_ini(inistream, pt);
+
+	if (auto value = pt.get_optional<bool>("Thumbtip.UseThumbnailTooltip"))
+		s_bUseThumbnailTooltip = value.get();
+	if (auto value = pt.get_optional<int>("Thumbtip.MaxThumbnailSizeWidth"))
+		s_MaxThumbnailSize.cx	= value.get();
+	if (auto value = pt.get_optional<int>("Thumbtip.MaxThumbnailSizeHeight"))
+		s_MaxThumbnailSize.cy	= value.get();
+	if (auto value = pt.get_optional<int>("Thumbtip.MaxThumbnailCache"))
+		s_nMaxThumbnailCache	= value.get();
+}
+
+void CThumbnailTooltipConfig::SaveConfig()
+{
+	ptree pt;
+	std::ifstream	inistream(g_szIniFileName);
+	read_ini(inistream, pt);
+	inistream.close();
+
+	pt.put("Thumbtip.UseThumbnailTooltip"	, s_bUseThumbnailTooltip);
+	pt.put("Thumbtip.MaxThumbnailSizeWidth"	, s_MaxThumbnailSize.cx);
+	pt.put("Thumbtip.MaxThumbnailSizeHeight", s_MaxThumbnailSize.cy);
+	pt.put("Thumbtip.MaxThumbnailCache"		, s_nMaxThumbnailCache);
+
+	std::ofstream iniostream(g_szIniFileName, std::ios::out | std::ios::trunc);
+	write_ini(iniostream, pt);
+	iniostream.close();
+}
 
 
+//////////////////////////////////////////////
+/// サムネイルツールチップ
+class CThumbnailTooltipPropertyPage : 
+	public CPropertyPageImpl<CThumbnailTooltipPropertyPage>,
+	public CWinDataExchange<CThumbnailTooltipPropertyPage>,
+	protected CThumbnailTooltipConfig
+{
+public:
+	enum { IDD = IDD_THUMBNAILTOOLTIP };
 
+	// DDX map
+    BEGIN_DDX_MAP(CThumbnailTooltipPropertyPage)
+		DDX_CHECK(IDC_CHECK_USRTHUMBNAILTOOLTIP	, s_bUseThumbnailTooltip )
+		DDX_INT_RANGE(IDC_EDIT_MAXWIDTH			, (int&)s_MaxThumbnailSize.cx	, 64, 1024)
+		DDX_INT_RANGE(IDC_EDIT_MAXHEIGHT		, (int&)s_MaxThumbnailSize.cy	, 64, 1024)
+		DDX_INT_RANGE(IDC_EDIT_MAXTHUMBNAIL		, s_nMaxThumbnailCache	, 1, 2000)
+    END_DDX_MAP()
+	
 
+	// Message map
+	BEGIN_MSG_MAP_EX( CThumbnailTooltipPropertyPage )
+		MSG_WM_INITDIALOG( OnInitDialog )
+		CHAIN_MSG_MAP( CPropertyPageImpl<CThumbnailTooltipPropertyPage> )
+	END_MSG_MAP()
+
+	BOOL OnInitDialog(CWindow wndFocus, LPARAM lInitParam)
+	{
+		DoDataExchange(DDX_LOAD);
+		CUpDownCtrl(GetDlgItem(IDC_SPIN1)).SetRange(64, 1024);
+		CUpDownCtrl(GetDlgItem(IDC_SPIN2)).SetRange(64, 1024);
+		CUpDownCtrl(GetDlgItem(IDC_SPIN3)).SetRange(1, 2000);
+
+		return 0;
+	}
+
+	BOOL OnApply()
+	{
+		CSize prevSize = s_MaxThumbnailSize;
+		if (!DoDataExchange(DDX_SAVE))
+			return FALSE;
+
+		if (prevSize != s_MaxThumbnailSize)
+			s_bMaxThumbnailSizeChanged	= true;	// キャッシュのクリアを促す
+
+		SaveConfig();	/* 保存 */
+
+		return TRUE;
+	}
+
+    void OnDataValidateError(UINT nCtrlID, BOOL bSave, _XData& data)
+	{
+        CString strMsg; 
+        strMsg.Format(_T("%d から %d までの値を入力してください。"),
+            data.intData.nMin, data.intData.nMax);
+        MessageBox(strMsg, _T("エラー"), MB_ICONEXCLAMATION);
+
+        ::SetFocus(GetDlgItem(nCtrlID));
+	}
+
+};
 
 
 ///////////////////////////////////////////////////////////
@@ -225,6 +329,9 @@ INT_PTR	CExpTabBarOption::Show(HWND hWndParent)
 
 	CTabBarOptionPropertyPage	tabPage;
 	AddPage(tabPage);
+	CThumbnailTooltipPropertyPage	thumbtipPage;
+	AddPage(thumbtipPage);
 	
 	return DoModal(hWndParent);
 }
+

@@ -67,6 +67,12 @@
     <ClCompile Include="ExpTabBarOption.cpp">
       <Filter>ソース ファイル\オプション</Filter>
     </ClCompile>
+    <ClCompile Include="ThumbnailTooltip.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="GdiplusUtil.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dllmain.h">
@@ -125,6 +131,12 @@
     </ClInclude>
     <ClInclude Include="ExpTabBarOption.h">
       <Filter>ソース ファイル\オプション</Filter>
+    </ClInclude>
+    <ClInclude Include="ThumbnailTooltip.h">
+      <Filter>ソース ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="GdiplusUtil.h">
+      <Filter>ソース ファイル</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

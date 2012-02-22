@@ -104,6 +104,55 @@ PIDLIST_ABSOLUTE GetCurIDList(IShellBrowser* pShellBrowser)
 	return NULL;
 }
 
+/// 現在表示中のビューの nIndex にあるアイテムのpidlを得る
+PIDLIST_ABSOLUTE GetIDListByIndex(IShellBrowser* pShellBrowser, int nIndex)
+{
+	ATLASSERT( pShellBrowser );
+
+	CComPtr<IShellView>	spShellView;
+	HRESULT hr = pShellBrowser->QueryActiveShellView(&spShellView);
+	CComQIPtr<IFolderView>	spFolderView = spShellView;
+	if (spFolderView == nullptr)
+		return nullptr;
+
+	LPITEMIDLIST pidlChild = nullptr;
+	spFolderView->Item(nIndex, &pidlChild);
+	if (pidlChild == nullptr)
+		return nullptr;
+
+	LPITEMIDLIST pidlFolder = ShellWrap::GetCurIDList(pShellBrowser);
+	LPITEMIDLIST pidlSelectedItem = ::ILCombine(pidlFolder, pidlChild);
+	::ILFree(pidlFolder);
+
+	return pidlSelectedItem;
+}
+
+/// path のInfoTipTextを取得します
+CString GetInfoTipText(LPCTSTR path)
+{
+	LPITEMIDLIST pidl = ShellWrap::CreateIDListFromFullPath(path);
+	if (pidl) {
+		CComPtr<IShellFolder>	spShellFolder;
+		LPCITEMIDLIST	pidlChild = nullptr;
+		if (SUCCEEDED(::SHBindToParent(pidl, IID_IShellFolder, (void**)&spShellFolder, &pidlChild))) {
+			LPCITEMIDLIST pidlChildArray[] = { pidlChild };
+			UINT rgfReserved = 0;
+			CComPtr<IQueryInfo>	spQueryInfo;
+			if (SUCCEEDED(spShellFolder->GetUIObjectOf(NULL, 1, pidlChildArray, IID_IQueryInfo, &rgfReserved, (void**)&spQueryInfo))) {
+				LPWSTR strText;
+				if (SUCCEEDED(spQueryInfo->GetInfoTip(QITIPF_DEFAULT, &strText))) {
+					CString str = strText;
+					CoTaskMemFree((LPVOID)strText);
+					ILFree(pidl);
+					return str;
+				}
+			}
+		}
+		ILFree(pidl);
+	}
+	return CString();
+}
+
 
 /// lnkのリンク先を返します
 PIDLIST_ABSOLUTE GetResolveIDList(PIDLIST_ABSOLUTE pidl)

@@ -177,6 +177,19 @@ const CString GetExeDirName()
 	return str.Left(n);
 }
 
+
+/// path ‚©‚çŠg’£Žq‚ð“¾‚é('.'‚ÍŠÜ‚Ü‚ê‚¸)
+CString GetPathExtention(const CString& path)
+{
+	LPWSTR strtemp = ::PathFindExtension(path);
+	if (strtemp) {
+		++strtemp;	// '.' ‚ð”ò‚Î‚·
+		return strtemp;
+	}
+	return CString();
+}
+
+
 // UTF8•¶Žš—ñ‚ðwcs(UTF16LE)•¶Žš—ñ‚É•ÏŠ·
 const std::vector<wchar_t> utf8_to_wcs(const char* pUtf8)
 {
