@@ -48,7 +48,15 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		std::unique_ptr<Gdiplus::Image> bmpRaw(Gdiplus::Bitmap::FromFile(path.c_str()));
 		if (bmpRaw) {
 			imgdata.ActualSize = _CalcActualSize(bmpRaw.get());
-			imgdata.thumbnail = bmpRaw->GetThumbnailImage(imgdata.ActualSize.cx, imgdata.ActualSize.cy);
+
+			/* ƒTƒ€ƒlƒCƒ‹ì¬ */
+			Gdiplus::Graphics	graphics(m_hWnd);
+			imgdata.thumbnail = new Gdiplus::Bitmap(imgdata.ActualSize.cx, imgdata.ActualSize.cy, &graphics);
+			Gdiplus::Graphics	graphicsTarget(imgdata.thumbnail);
+			graphicsTarget.SetInterpolationMode(Gdiplus::InterpolationModeBilinear);
+			graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
+
+			//imgdata.thumbnail = bmpRaw->GetThumbnailImage(imgdata.ActualSize.cx, imgdata.ActualSize.cy);
 			imgdata.strInfoTipText = ShellWrap::GetInfoTipText(path.c_str());
 			imgdata.nInfoTipHeight = _CalcInfoTipTextHeight(imgdata);
 	
