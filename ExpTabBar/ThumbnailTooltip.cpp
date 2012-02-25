@@ -188,7 +188,7 @@ CSize	CThumbnailTooltip::_CalcActualSize(Gdiplus::Image* image)
 			}
 		} else {
 			ActualSize.cy = (int)( (kMaxImageWidth / (double)nImageWidth) * nImageHeight );
-			ActualSize.cy = kMaxImageWidth;
+			ActualSize.cx = kMaxImageWidth;
 		}
 	} else {
 		ActualSize.SetSize(nImageWidth, nImageHeight);

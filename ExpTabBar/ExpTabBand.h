@@ -61,19 +61,23 @@ ALT_MSG_MAP(1)
 	NOTIFY_CODE_HANDLER_EX(LVN_ITEMCHANGED, OnListViewItemChanged)
 	//NOTIFY_CODE_HANDLER_EX(TTN_SHOW, OnListViewGetDispInfo)
 	MSG_WM_PARENTNOTIFY( OnParentNotify )
-ALT_MSG_MAP(2)
+ALT_MSG_MAP(2)	// SysListView32
 	if (CThumbnailTooltipConfig::s_bUseThumbnailTooltip) {
 		NOTIFY_CODE_HANDLER_EX(TTN_GETDISPINFOW, OnListViewGetDispInfo)
 		MSG_WM_MOUSEMOVE( OnListViewMouseMove )
 		MSG_WM_MOUSELEAVE( OnListViewMouseLeave )
 		MSG_WM_MOUSEHOVER( OnListViewMouseHover )
+		MSG_WM_KEYUP	 ( OnListViewKeyUp	)
+		MSG_WM_KILLFOCUS ( OnListViewKillFocus )
 	}
-ALT_MSG_MAP(3)
+ALT_MSG_MAP(3)	// DirectUI
 	if (CThumbnailTooltipConfig::s_bUseThumbnailTooltip) {
 		NOTIFY_CODE_HANDLER_EX(TTN_NEEDTEXTW, OnListViewGetDispInfo)
 		MSG_WM_MOUSEMOVE( OnListViewMouseMove )
 		MSG_WM_MOUSELEAVE( OnListViewMouseLeave )
 		MSG_WM_MOUSEHOVER( OnListViewMouseHover )
+		MSG_WM_KEYUP	 ( OnListViewKeyUp	)
+		MSG_WM_KILLFOCUS ( OnListViewKillFocus )
 	}
 END_MSG_MAP()
 
@@ -111,6 +115,8 @@ public:
 	void	OnListViewMouseMove(UINT nFlags, CPoint point);
 	void	OnListViewMouseLeave();
 	void	OnListViewMouseHover(WPARAM wParam, CPoint ptPos);
+	void	OnListViewKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags);
+	void	OnListViewKillFocus(CWindow wndFocus);
 
 	void	OnParentNotify(UINT message, UINT nChildID, LPARAM lParam);
 
@@ -118,6 +124,7 @@ private:
 	int		_HitTestDirectUI(CRect& rcItem);
 	int		_HitTestListView(const CPoint& pt);
 	int		_HitTestListView();
+	CRect	_GetItemRect(int nIndex);
 	bool	_ShowThumbnailTooltip(int nIndex, CRect rcItem);
 	void	_HideThumbnailTooltip();
 	void	_TrackMouseLeave(HWND hWnd);
@@ -141,6 +148,7 @@ private:
 	int		m_nIndexTooltip;
 	bool	m_bNowTrackMouseLeave;
 	bool	m_bNowTrackMouseHover;
+	CPoint	m_ptLastForMouseMove;
 
 	CThumbnailTooltip	m_ThumbnailTooltip;
 };

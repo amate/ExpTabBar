@@ -290,19 +290,25 @@ void	CExpTabBand::OnListViewMouseMove(UINT nFlags, CPoint point)
 		_TrackMouseHover(bListView ? m_ListView.m_hWnd : m_wndDirectUI.m_hWnd);
 
 	if (m_ThumbnailTooltip.IsWindowVisible()) {
+		CPoint ptNow;
+		::GetCursorPos(&ptNow);
+		if (m_ptLastForMouseMove == ptNow) {
+			return ;	// キーボードでの移動
+		}
 		CRect rcItem;
 		int nIndex = bListView ? _HitTestListView() : _HitTestDirectUI(rcItem);
+		if (nIndex == -1) {
+			_HideThumbnailTooltip();
+			return ;
+		}
+
 		if (nIndex != -1 && m_nIndexTooltip != nIndex) {
 			if (bListView) {
 				m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
 			}
-			if (_ShowThumbnailTooltip(nIndex, rcItem)) {
-				return ;
-			} else {
+			if (!_ShowThumbnailTooltip(nIndex, rcItem)) {
 				_HideThumbnailTooltip();
 			}
-		} else if (nIndex == -1) {
-			_HideThumbnailTooltip();
 		}
 	}
 
@@ -322,6 +328,12 @@ void	CExpTabBand::OnListViewMouseHover(WPARAM wParam, CPoint ptPos)
 {
 	m_bNowTrackMouseHover = false;
 
+	CPoint ptNow;
+	::GetCursorPos(&ptNow);
+	if (m_ptLastForMouseMove == ptNow) {
+		return ;	// キーボードでの移動
+	}
+
 	CRect rcItem;
 	int nIndex = -1;
 	if (m_ListView.m_hWnd) {
@@ -335,6 +347,43 @@ void	CExpTabBand::OnListViewMouseHover(WPARAM wParam, CPoint ptPos)
 	if (nIndex != -1 && m_nIndexTooltip != nIndex) {
 		_ShowThumbnailTooltip(nIndex, rcItem);
 	}
+}
+
+void	CExpTabBand::OnListViewKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags)
+{
+	CRect rcItem;
+	int nIndex = -1;
+	bool bListView = m_ListView.m_hWnd != NULL;
+	if (bListView) {
+		m_wndListView.DefWindowProc();
+		nIndex = m_ListView.GetNextItem(-1, LVNI_SELECTED);
+		if (nIndex != -1)
+			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
+	} else {
+		m_wndDirectUI.DefWindowProc();
+		CComPtr<IShellView>	spShellView;
+		m_spShellBrowser->QueryActiveShellView(&spShellView);
+		CComQIPtr<IFolderView>	spFolderView = spShellView;
+		spFolderView->GetFocusedItem(&nIndex);
+		if (nIndex != -1)
+			rcItem = _GetItemRect(nIndex);
+	}
+
+	if (nIndex == -1) {
+		_HideThumbnailTooltip();
+		return ;
+	}
+	::GetCursorPos(&m_ptLastForMouseMove);
+	m_ptLastForMouseMove;
+	if (!_ShowThumbnailTooltip(nIndex, rcItem)) {
+		_HideThumbnailTooltip();
+	}
+}
+
+void	CExpTabBand::OnListViewKillFocus(CWindow wndFocus)
+{
+	SetMsgHandled(FALSE);
+	_HideThumbnailTooltip();
 }
 
 
@@ -474,6 +523,43 @@ int		CExpTabBand::_HitTestListView()
 
 }
 
+CRect	CExpTabBand::_GetItemRect(int nIndex)
+{
+	CRect rcItem;
+	HRESULT	hr;
+	CComPtr<IUIAutomationElement>	spShellViewElement;
+	hr = m_spUIAutomation->ElementFromHandle(m_wndShellView, &spShellViewElement);
+	if (FAILED(hr))
+		return rcItem;
+
+	CComBSTR strIndex(boost::lexical_cast<std::wstring>(nIndex).c_str());
+	CComVariant	vProp(strIndex);
+	CComPtr<IUIAutomationCondition>	spCondition;
+	hr = m_spUIAutomation->CreatePropertyCondition(UIA_AutomationIdPropertyId, vProp, &spCondition);
+	if (FAILED(hr)) 
+		return rcItem;
+
+	CComPtr<IUIAutomationElement>	spUIElement;
+	hr = spShellViewElement->FindFirst(TreeScope_Descendants, spCondition, &spUIElement);
+	if (FAILED(hr) || spUIElement == nullptr)
+		return rcItem;
+
+	CComBSTR strItemNameDisplay = L"System.ItemNameDisplay";
+	CComVariant	vProp2(strItemNameDisplay);
+	CComPtr<IUIAutomationCondition>	spCondition2;
+	m_spUIAutomation->CreatePropertyCondition(UIA_AutomationIdPropertyId, vProp2, &spCondition2);
+	if (spCondition2) {
+		CComPtr<IUIAutomationElement>	spUIItenNameElm;
+		spUIElement->FindFirst(TreeScope_Children, spCondition2, &spUIItenNameElm);
+		if (spUIItenNameElm) {
+			spUIItenNameElm->get_CurrentBoundingRectangle(&rcItem);
+			m_wndDirectUI.ScreenToClient(&rcItem);
+			return rcItem;
+		}
+	}
+	return rcItem;
+}
+
 bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem)
 {
 	//SetLayeredWindowAttributes(m_pThumbnailTooltip->m_hWnd, 0, 255, LWA_ALPHA);
@@ -484,6 +570,7 @@ bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem)
 		return false;
 
 	CString path = ShellWrap::GetFullPathFromIDList(pidl);
+	::ILFree(pidl);
 	CString strExt = Misc::GetPathExtention(path);
 	strExt.MakeLower();
 	if (strExt == _T("jpg") || strExt == _T("jpeg") || strExt == _T("png") || strExt == _T("gif") || strExt == _T("bmp"))
