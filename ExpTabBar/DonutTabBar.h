@@ -106,9 +106,11 @@ public:
 		COMMAND_ID_HANDLER_EX( ID_LEFTALLCLOSE		, OnLeftAllClose )
 		COMMAND_ID_HANDLER_EX( ID_EXCEPTCURTABCLOSE	, OnExceptCurTabClose )
 		COMMAND_ID_HANDLER_EX( ID_OPEN_UPFOLDER		, OnOpenUpFolder )
+		COMMAND_ID_HANDLER_EX( ID_ADD_FAVORITES		, OnAddFavorites )
 		COMMAND_ID_HANDLER_EX( ID_NAVIGATELOCK		, OnNavigateLock )
 		COMMAND_ID_HANDLER_EX( ID_OPTION			, OnOpenOption )
 		COMMAND_RANGE_HANDLER_EX( ID_RECENTCLOSED_FIRST, ID_RECENTCLOSED_LAST, OnClosedTabCreate )
+		COMMAND_RANGE_HANDLER_EX( ID_FAVORITES_FIRST	, ID_FAVORITES_LAST, OnFavoritesOpen )
 		NOTIFY_CODE_HANDLER( TTN_GETDISPINFO, OnTooltipGetDispInfo )
 		CHAIN_MSG_MAP( COleDragDropTabCtrl<CDonutTabBar> )
 	END_MSG_MAP()
@@ -131,10 +133,11 @@ public:
 	void	OnLeftAllClose(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnExceptCurTabClose(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnOpenUpFolder(UINT uNotifyCode, int nID, CWindow wndCtl);
+	void	OnAddFavorites(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnNavigateLock(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnOpenOption(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnClosedTabCreate(UINT uNotifyCode, int nID, CWindow wndCtl);
-
+	void	OnFavoritesOpen(UINT uNotifyCode, int nID, CWindow wndCtl);
 
 	LRESULT OnTooltipGetDispInfo(int idCtrl, LPNMHDR pnmh, BOOL& bHandled);
 
@@ -197,8 +200,10 @@ private:
 			, hbmp(NULL) { }
 	};
 
+
 	vector<HistoryItem>	m_vecHistoryItem;
 	CMenu			m_menuHistory;
+	CMenu			m_menuFavorites;
 	CToolTipCtrl	m_tipHistroy;
 
 	HWND			m_hSearch;

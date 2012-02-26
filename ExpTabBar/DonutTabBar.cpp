@@ -1615,6 +1615,8 @@ int		CDonutTabBar::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	RestoreHistory();
 
+	CFavoritesOption::LoadConfig();
+
 	/* ツールチップを作成 */
 	m_tipHistroy.Create(m_hWnd);
 
@@ -1625,6 +1627,7 @@ int		CDonutTabBar::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	m_menuPopup.LoadMenu(IDM_TAB);
 	m_menuHistory = m_menuPopup.GetSubMenu(1).GetSubMenu(0);
+	m_menuFavorites = m_menuPopup.GetSubMenu(1).GetSubMenu(1);
 
 	SetTimer(AutoSaveTimerID, AutoSaveInterval);
 
@@ -1654,6 +1657,8 @@ void	CDonutTabBar::OnDestroy()
 
 		m_bSaveAllTab = false;
 	}
+
+	CFavoritesOption::CleanFavoritesItem();
 
 	KillTimer(AutoSaveTimerID);
 
@@ -1703,6 +1708,31 @@ void	CDonutTabBar::OnInitMenuPopup(CMenuHandle menuPopup, UINT nIndex, BOOL bSys
 			mii.hbmpUnchecked = m_vecHistoryItem[i].hbmp;
 			m_menuHistory.InsertMenuItem(i, TRUE, &mii);
 		}
+	} else if (menuPopup.m_hMenu == m_menuFavorites.m_hMenu) {
+		while (m_menuFavorites.GetMenuItemCount())
+			m_menuFavorites.DeleteMenu(0, MF_BYPOSITION);
+		int nCount = (int)CFavoritesOption::s_vecFavoritesItem.size();
+		for (int i = 0; i < nCount; ++i) {
+			auto& item = CFavoritesOption::s_vecFavoritesItem[i];
+			bool bSep = item.strPath == FAVORITESSEPSTRING;
+			MENUITEMINFO	mii = { sizeof(MENUITEMINFO) };
+			mii.fMask	= MIIM_ID | MIIM_CHECKMARKS | MIIM_STATE | MIIM_TYPE;
+			mii.fType	= bSep ? MFT_SEPARATOR : MFT_STRING;
+			mii.fState	= MFS_UNCHECKED;
+			mii.wID		= ID_FAVORITES_FIRST + i;
+			mii.dwTypeData	= item.strTitle.GetBuffer();
+			mii.cch			= item.strTitle.GetLength();
+			mii.hbmpUnchecked = item.bmpIcon.m_hBitmap;
+			m_menuFavorites.InsertMenuItem(i, TRUE, &mii);
+		}
+		if (nCount == 0) {
+			MENUITEMINFO	mii = { sizeof(MENUITEMINFO) };
+			mii.fMask	= MIIM_ID | MIIM_STATE | MIIM_TYPE;
+			mii.fType	= MFT_STRING;
+			mii.fState	= MFS_GRAYED;
+			mii.dwTypeData	= _T("(なし)");
+			m_menuFavorites.InsertMenuItem(0, TRUE, &mii);
+		}
 	}
 }
 
@@ -1712,6 +1742,20 @@ void	CDonutTabBar::OnMenuSelect(UINT nItemID, UINT nFlags, CMenuHandle menu)
 		if (nFlags & MF_MOUSESELECT) {
 			int i = nItemID - ID_RECENTCLOSED_FIRST;
 			m_tipHistroy.UpdateTipText(m_vecHistoryItem[i].strFullPath.GetBuffer(), m_hWnd);
+
+			/* トラックしない */
+			CToolInfo	tinfo(0, m_hWnd);
+			m_tipHistroy.TrackActivate(tinfo, TRUE);
+
+			CPoint pt;
+			GetCursorPos(&pt);
+			m_tipHistroy.TrackPosition(pt.x, pt.y + 30);
+			return;
+		}
+	} else if (menu.m_hMenu == m_menuFavorites.m_hMenu) {
+		if (nFlags & MF_MOUSESELECT) {
+			int i = nItemID - ID_FAVORITES_FIRST;
+			m_tipHistroy.UpdateTipText(CFavoritesOption::s_vecFavoritesItem[i].strPath.GetBuffer(), m_hWnd);
 
 			/* トラックしない */
 			CToolInfo	tinfo(0, m_hWnd);
@@ -1846,6 +1890,16 @@ void	CDonutTabBar::OnOpenUpFolder(UINT uNotifyCode, int nID, CWindow wndCtl)
 	}
 }
 
+/// お気に入りに追加する
+void	CDonutTabBar::OnAddFavorites(UINT uNotifyCode, int nID, CWindow wndCtl)
+{
+	int nIndex = m_ClickedIndex;
+	if (nIndex != -1) {
+		CFavoritesOption::AddFavorites(m_items[nIndex].m_pidl);
+	}
+}
+
+
 /// タブをナビゲートロック状態にする
 void	CDonutTabBar::OnNavigateLock(UINT uNotifyCode, int nID, CWindow wndCtl)
 {
@@ -1871,7 +1925,7 @@ void	CDonutTabBar::OnOpenOption(UINT uNotifyCode, int nID, CWindow wndCtl)
 	_UpdateLayout();
 }
 
-// 最近閉じたタブを復元する
+/// 最近閉じたタブを復元する
 void	CDonutTabBar::OnClosedTabCreate(UINT uNotifyCode, int nID, CWindow wndCtl)
 {
 	int i = nID - ID_RECENTCLOSED_FIRST;
@@ -1886,6 +1940,23 @@ void	CDonutTabBar::OnClosedTabCreate(UINT uNotifyCode, int nID, CWindow wndCtl)
 	AddTabItem(item);
 
 	_DeleteHistory(i);
+}
+
+/// お気に入りを開く
+void	CDonutTabBar::OnFavoritesOpen(UINT uNotifyCode, int nID, CWindow wndCtl)
+{
+	int i = nID - ID_FAVORITES_FIRST;
+	LPITEMIDLIST	pidl = nullptr;
+	const auto& item = CFavoritesOption::s_vecFavoritesItem[i];
+	if (item.pidl)
+		pidl = ::ILClone(CFavoritesOption::s_vecFavoritesItem[i].pidl);
+	else
+		pidl = ShellWrap::CreateIDListFromFullPath(item.strPath);
+	if (pidl == nullptr) {
+		MessageBox(item.strTitle + _T(" が開けませんでした"), NULL, MB_ICONWARNING);
+		return ;
+	}
+	OnTabCreate(pidl, true);
 }
 
 LRESULT CDonutTabBar::OnTooltipGetDispInfo(int idCtrl, LPNMHDR pnmh, BOOL& bHandled)

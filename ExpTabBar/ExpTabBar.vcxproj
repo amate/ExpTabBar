@@ -332,6 +332,7 @@
     <ResourceCompile Include="ExpTabBar.rc" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="ClassDiagram1.cd" />
     <None Include="ExpTabBand.rgs" />
     <None Include="ExpTabBar.def" />
     <None Include="ExpTabBar.rgs" />

@@ -75,6 +75,33 @@ public:
 
 };
 
+////////////////////////////////////////////
+// お気に入りの設定
+
+#define FAVORITESSEPSTRING	_T("---------------------")
+
+class CFavoritesOption
+{
+public:
+	struct FavoritesItem {
+		CString strTitle;
+		CString strPath;
+		LPITEMIDLIST	pidl;
+		CBitmapHandle	bmpIcon;
+
+		FavoritesItem() : pidl(nullptr) { }
+	};
+
+	static std::vector<FavoritesItem>	s_vecFavoritesItem;
+
+	static void AddFavorites(LPITEMIDLIST pidl);
+	static void	CleanFavoritesItem();
+
+	static void LoadConfig();
+	static void SaveConfig();
+
+};
+
 ///////////////////////////////////////////////////////////
 ///  オプションダイアログ
 

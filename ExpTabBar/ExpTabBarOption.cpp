@@ -6,11 +6,15 @@
 #include "stdafx.h"
 #include "ExpTabBarOption.h"
 #include "resource.h"
+#include <codecvt>
 #include <atlddx.h>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <boost/property_tree/xml_parser.hpp>
 #include <boost/optional.hpp>
+#include <atlenc.h>
 #include "DonutFunc.h"
+#include "ShellWrap.h"
 
 using namespace boost::property_tree;
 
@@ -316,6 +320,297 @@ public:
 
 };
 
+////////////////////////////////////////////
+// お気に入りの設定
+
+// 定義
+std::vector<CFavoritesOption::FavoritesItem>	CFavoritesOption::s_vecFavoritesItem;
+
+/// pidl をお気に入りに追加する
+void CFavoritesOption::AddFavorites(LPITEMIDLIST pidl)
+{
+	ATLASSERT(pidl);
+	FavoritesItem	item;
+	item.strPath	= ShellWrap::GetFullPathFromIDList(pidl);
+	item.strTitle	= ShellWrap::GetNameFromIDList(pidl);
+	item.pidl		= ::ILClone(pidl);
+	CIcon	icon = ShellWrap::CreateIconFromIDList(pidl);
+	if (icon.m_hIcon) 
+		item.bmpIcon	= Misc::CreateBitmapFromHICON(icon);
+	s_vecFavoritesItem.push_back(item);
+
+	SaveConfig();
+}
+
+/// s_vecFavoritesItem をかたずける
+void	CFavoritesOption::CleanFavoritesItem()
+{
+	for (auto it = s_vecFavoritesItem.begin(); it != s_vecFavoritesItem.end(); ++it) {
+		if (it->pidl)
+			::ILFree(it->pidl);
+		if (it->bmpIcon)
+			it->bmpIcon.DeleteObject();
+	}
+
+	s_vecFavoritesItem.clear();
+}
+
+void	CFavoritesOption::LoadConfig()
+{
+	CString FavoritesConfigPath = Misc::GetExeDirectory() + _T("Favorites.xml");
+
+	CleanFavoritesItem();
+	s_vecFavoritesItem.reserve(20);
+
+	wptree	pt;
+	std::wifstream 	configstream(FavoritesConfigPath, std::ios::in);
+	if (!configstream)
+		return ;
+	configstream.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>));
+	read_xml(configstream, pt);
+
+	if (auto ptChild = pt.get_child_optional(L"Favorites")) {
+		for (auto it = ptChild->begin(); it != ptChild->end(); ++it) {
+			wptree ptItem = it->second;
+			FavoritesItem	itemdata;
+			itemdata.strTitle = ptItem.get<std::wstring>(L"title", L"").c_str();
+			itemdata.strPath	= ptItem.get<std::wstring>(L"path", L"").c_str();
+			if (itemdata.strPath != FAVORITESSEPSTRING) {
+				CStringA base64data = ptItem.get<std::wstring>(L"ITEMIDLIST", L"").c_str();
+				if (base64data.GetLength() > 0) {
+					int nLength = ::Base64DecodeGetRequiredLength(base64data.GetLength());
+					itemdata.pidl	= (LPITEMIDLIST)::CoTaskMemAlloc(nLength);
+					::Base64Decode(base64data, base64data.GetLength(), (BYTE*)itemdata.pidl, &nLength);
+				}
+				CIcon icon = ShellWrap::CreateIconFromIDList(itemdata.pidl);
+				if (icon.m_hIcon) {
+					itemdata.bmpIcon	= Misc::CreateBitmapFromHICON(icon);
+				}
+			}
+			s_vecFavoritesItem.push_back(itemdata);
+		}
+	}
+
+}
+
+void	CFavoritesOption::SaveConfig()
+{
+	wptree	pt;
+	wptree	ptChild;
+	for (auto it = s_vecFavoritesItem.begin(); it != s_vecFavoritesItem.end(); ++it) {
+		wptree ptItem;
+		ptItem.add(L"title", (LPCTSTR)it->strTitle);
+		ptItem.add(L"path"	, (LPCTSTR)it->strPath);
+		UINT uSize = ::ILGetSize(it->pidl);
+		CStringA	strbuff;
+		int			buffSize = ::Base64EncodeGetRequiredLength((int)uSize, ATL_BASE64_FLAG_NOCRLF | ATL_BASE64_FLAG_NOPAD);
+		if (::Base64Encode((BYTE*)it->pidl, uSize, strbuff.GetBuffer(buffSize), &buffSize, ATL_BASE64_FLAG_NOCRLF | ATL_BASE64_FLAG_NOPAD)) {
+			CString strWide = strbuff;
+			strWide.SetAt(buffSize - 1, L'\0');
+			ptItem.add(L"ITEMIDLIST", (LPCTSTR)strWide);
+		}
+		ptChild.add_child(L"item", ptItem);
+	}
+	pt.add_child(L"Favorites", ptChild);
+
+	CString FavoritesConfigPath = Misc::GetExeDirectory() + _T("Favorites.xml");
+	std::wofstream 	ostream(FavoritesConfigPath, std::ios::out | std::ios::trunc);
+	if (!ostream) {
+		MessageBox(NULL, _T("Favorites.xmlのオープンに失敗"), NULL, MB_ICONERROR);
+		return ;
+	}
+
+	ostream.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>));
+	write_xml(ostream, pt, xml_writer_make_settings(L' ', 2, xml_parser::widen<wchar_t>("utf-8")));
+
+}
+
+//////////////////////////////////////////////
+/// お気に入り
+class CFavoritesPropertyPage : 
+	public CPropertyPageImpl<CFavoritesPropertyPage>,
+	public CWinDataExchange<CFavoritesPropertyPage>,
+	protected CFavoritesOption
+{
+public:
+	enum { IDD = IDD_FAVORITES };
+
+	// DDX map
+    BEGIN_DDX_MAP(CThumbnailTooltipPropertyPage)
+		DDX_CONTROL_HANDLE(IDC_LIST_FAVORITS, m_ListFavorites )
+		DDX_TEXT(IDC_EDIT_TITLE	, m_strTitle)
+		DDX_TEXT(IDC_EDIT_PATH	, m_strPath)
+    END_DDX_MAP()
+	
+
+	// Message map
+	BEGIN_MSG_MAP_EX( CFavoritesPropertyPage )
+		MSG_WM_INITDIALOG( OnInitDialog )
+		COMMAND_HANDLER_EX(IDC_LIST_FAVORITS, LBN_SELCHANGE, OnListSelChange )
+		COMMAND_ID_HANDLER_EX( IDC_BUTTON_UP, OnUp )
+		COMMAND_ID_HANDLER_EX( IDC_BUTTON_DOWN, OnDown )
+		COMMAND_ID_HANDLER_EX( IDC_BUTTON_ADDSEP, OnAddSep )
+		COMMAND_ID_HANDLER_EX( IDC_BUTTON_DEL, OnDel )
+		COMMAND_ID_HANDLER_EX( IDC_BUTTON_ADD, OnAdd )
+		COMMAND_ID_HANDLER_EX( IDC_BUTTON_APPLY, OnButtonApply )
+		CHAIN_MSG_MAP( CPropertyPageImpl<CFavoritesPropertyPage> )
+	END_MSG_MAP()
+
+	BOOL OnInitDialog(CWindow wndFocus, LPARAM lInitParam)
+	{
+		DoDataExchange(DDX_LOAD);
+		for (auto it = s_vecFavoritesItem.begin(); it != s_vecFavoritesItem.end(); ++it) {
+			m_ListFavorites.AddString(it->strTitle);
+		}
+		return 0;
+	}
+
+	BOOL OnApply()
+	{
+		if (!DoDataExchange(DDX_SAVE))
+			return FALSE;
+
+		SaveConfig();	/* 保存 */
+
+		return TRUE;
+	}
+
+	void OnListSelChange(UINT uNotifyCode, int nID, CWindow wndCtl)
+	{
+		int nIndex = m_ListFavorites.GetCurSel();
+		if (nIndex == -1)
+			return ;
+		m_strTitle	= s_vecFavoritesItem[nIndex].strTitle;
+		m_strPath	= s_vecFavoritesItem[nIndex].strPath;
+		DoDataExchange(DDX_LOAD);
+	}
+
+	void OnUp(UINT uNotifyCode, int nID, CWindow wndCtl)
+	{
+		int nIndex = m_ListFavorites.GetCurSel();
+		if (nIndex == -1 || nIndex == 0)
+			return ;
+		auto item = s_vecFavoritesItem[nIndex];
+		s_vecFavoritesItem.erase(s_vecFavoritesItem.begin() + nIndex);
+		s_vecFavoritesItem.insert(s_vecFavoritesItem.begin() + nIndex - 1, item);
+
+		m_ListFavorites.DeleteString(nIndex);
+		m_ListFavorites.InsertString(nIndex - 1, item.strTitle);
+		m_ListFavorites.SetCurSel(nIndex - 1);
+	}
+
+	void OnDown(UINT uNotifyCode, int nID, CWindow wndCtl)
+	{
+		int nIndex = m_ListFavorites.GetCurSel();
+		if (nIndex == -1 || nIndex == m_ListFavorites.GetCount() - 1)
+			return ;
+		auto item = s_vecFavoritesItem[nIndex];
+		s_vecFavoritesItem.insert(s_vecFavoritesItem.begin() + nIndex + 2, item);
+		s_vecFavoritesItem.erase(s_vecFavoritesItem.begin() + nIndex);
+
+		m_ListFavorites.InsertString(nIndex + 2, item.strTitle);
+		m_ListFavorites.DeleteString(nIndex);
+		m_ListFavorites.SetCurSel(nIndex + 1);
+	}
+
+	void OnAddSep(UINT uNotifyCode, int nID, CWindow wndCtl)
+	{
+		int nIndex = m_ListFavorites.GetCurSel();
+		if (nIndex == -1)
+			return ;
+		FavoritesItem	item;
+		item.strTitle	= FAVORITESSEPSTRING;
+		item.strPath	= FAVORITESSEPSTRING;
+		s_vecFavoritesItem.insert(s_vecFavoritesItem.begin() + nIndex, item);
+
+		m_ListFavorites.InsertString(nIndex, FAVORITESSEPSTRING);
+	}
+
+	void OnDel(UINT uNotifyCode, int nID, CWindow wndCtl)
+	{
+		int nIndex = m_ListFavorites.GetCurSel();
+		if (nIndex == -1)
+			return ;
+		if (s_vecFavoritesItem[nIndex].bmpIcon) 
+			s_vecFavoritesItem[nIndex].bmpIcon.DeleteObject();
+		if (s_vecFavoritesItem[nIndex].pidl)
+			::ILFree(s_vecFavoritesItem[nIndex].pidl);
+		s_vecFavoritesItem.erase(s_vecFavoritesItem.begin() + nIndex);
+
+		m_ListFavorites.DeleteString(nIndex);
+		if (nIndex == m_ListFavorites.GetCount())
+			--nIndex;
+		m_ListFavorites.SetCurSel(nIndex);
+		OnListSelChange(0, 0, NULL);
+		if (nIndex == -1) {
+			m_strTitle	= _T("");
+			m_strPath	= _T("");
+			DoDataExchange(DDX_LOAD);
+		}
+	}
+
+	void OnAdd(UINT uNotifyCode, int nID, CWindow wndCtl)
+	{
+		int nIndex = m_ListFavorites.GetCurSel();
+		if (nIndex == -1)
+			nIndex = 0;
+		DoDataExchange(DDX_SAVE);
+		if (m_strTitle.IsEmpty() || m_strPath.IsEmpty()) {
+			MessageBox(_T("名前もしくはパスが設定されていません"), NULL, MB_ICONWARNING);
+			m_strTitle = _T("");
+			m_strPath = _T("");
+			DoDataExchange(DDX_LOAD);
+			return ;
+		}
+		if (m_strPath == FAVORITESSEPSTRING) {
+			OnAddSep(0, 0, NULL);
+			return ;
+		}
+		FavoritesItem	item;
+		item.strTitle	= m_strTitle;
+		item.strPath	= m_strPath;
+		item.pidl		= ShellWrap::CreateIDListFromFullPath(m_strPath);
+		if (item.pidl) {
+			CIcon icon = ShellWrap::CreateIconFromIDList(item.pidl);
+			if (icon.m_hIcon)
+				item.bmpIcon	= Misc::CreateBitmapFromHICON(icon);
+		} else {
+			MessageBox(item.strPath + _T(" は存在しないパスです"), NULL, MB_ICONWARNING);
+		}
+		s_vecFavoritesItem.insert(s_vecFavoritesItem.begin() + nIndex + 1, item);
+
+		int nInsert = m_ListFavorites.InsertString(nIndex + 1, m_strTitle);
+		m_ListFavorites.SetCurSel(nInsert);
+	}
+
+	void OnButtonApply(UINT uNotifyCode, int nID, CWindow wndCtl)
+	{
+		int nIndex = m_ListFavorites.GetCurSel();
+		if (nIndex == -1)
+			return ;
+
+		DoDataExchange(DDX_SAVE);
+		if (m_strTitle.IsEmpty() || m_strPath.IsEmpty()) {
+			MessageBox(_T("名前もしくはパスが設定されていません"), NULL, MB_ICONWARNING);
+			m_strTitle = _T("");
+			m_strPath = _T("");
+			DoDataExchange(DDX_LOAD);
+			return ;
+		}
+
+		OnAdd(0, 0, NULL);
+		m_ListFavorites.SetCurSel(nIndex);
+		OnDel(0, 0, NULL);		
+	}
+
+private:
+	CListBox	m_ListFavorites;
+	CString	m_strTitle;
+	CString m_strPath;
+
+};
+
+
 
 ///////////////////////////////////////////////////////////
 ///  オプションダイアログ
@@ -331,6 +626,8 @@ INT_PTR	CExpTabBarOption::Show(HWND hWndParent)
 	AddPage(tabPage);
 	CThumbnailTooltipPropertyPage	thumbtipPage;
 	AddPage(thumbtipPage);
+	CFavoritesPropertyPage	favoritesPage;
+	AddPage(favoritesPage);
 	
 	return DoModal(hWndParent);
 }
