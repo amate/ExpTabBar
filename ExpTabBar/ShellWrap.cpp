@@ -175,7 +175,23 @@ PIDLIST_ABSOLUTE GetResolveIDList(PIDLIST_ABSOLUTE pidl)
 	return pidlLink;
 }
 
+/// .lnkファイルを作成します
+bool	CreateLinkFile(LPITEMIDLIST pidl, LPCTSTR saveFilePath)
+{
+	CComPtr<IShellLink>	spShellLink;
+	HRESULT hr = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLink, (void **)&spShellLink);
+	if (FAILED(hr))
+		return false;
 
+	hr = spShellLink->SetIDList(pidl);
+	if (FAILED(hr))
+		return false;
+
+	CComQIPtr<IPersistFile>	spPersistFile = spShellLink;
+	if (spPersistFile == nullptr)
+		return false;
+	return SUCCEEDED(spPersistFile->Save(saveFilePath, TRUE));
+}
 
 
 /// アイテムＩＤリストで示されるフォルダが存在するかどうか

@@ -342,8 +342,6 @@ inline DROPEFFECT _MtlFilterDropEffect(DROPEFFECT dropEffect, DROPEFFECT dwEffec
 	return DROPEFFECT_NONE;
 }
 
-
-
 // helper to get a standard effect
 inline DROPEFFECT _MtlStandardDropEffect(DWORD dwKeyState)
 {
@@ -597,13 +595,12 @@ private:
 
 private:
 	// Data members
-	CComPtr<IDataObject> m_spDataObject;	// != NULL between OnDragEnter, OnDragLeave
 	UINT				 m_nTimerID;		// != MAKEWORD(-1, -1) when in scroll area
 	DWORD				 m_dwLastTick;		// only valid when m_nTimerID valid
 	UINT				 m_nScrollDelay;	// time to next scroll
-
+protected:
 	CComPtr<IDropTargetHelper>	m_spDropTargetHelper;
-
+	CComPtr<IDataObject> m_spDataObject;	// != NULL between OnDragEnter, OnDragLeave
 
 public:
 	// コンストラクタ

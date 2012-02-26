@@ -37,6 +37,8 @@ CString GetInfoTipText(LPCTSTR path);
 /// lnkのリンク先を返します
 PIDLIST_ABSOLUTE GetResolveIDList(PIDLIST_ABSOLUTE pidl);
 
+/// .lnkファイルを作成します
+bool	CreateLinkFile(LPITEMIDLIST pidl, LPCTSTR saveFilePath);
 
 /// アイテムＩＤリストで示されるフォルダが存在するかどうか
 bool	IsExistFolderFromIDList(PCIDLIST_ABSOLUTE pidl);

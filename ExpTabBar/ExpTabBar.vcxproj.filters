@@ -161,7 +161,6 @@
     <None Include="res\folder_open.ico">
       <Filter>リソース ファイル</Filter>
     </None>
-    <None Include="ClassDiagram1.cd" />
   </ItemGroup>
   <ItemGroup>
     <Midl Include="ExpTabBar.idl">

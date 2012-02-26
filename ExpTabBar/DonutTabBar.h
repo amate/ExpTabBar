@@ -84,6 +84,7 @@ public:
 	DROPEFFECT	OnDragEnter(IDataObject *pDataObject, DWORD dwKeyState, CPoint point);
 	DROPEFFECT	OnDragOver (IDataObject *pDataObject, DWORD dwKeyState, CPoint point, DROPEFFECT dropOkEffect);
 	DROPEFFECT	OnDrop	   (IDataObject *pDataObject, DROPEFFECT dropEffect, DROPEFFECT dropEffectList, CPoint point);
+	void		OnDragLeave();
 
 	// notify
 	void	RefreshTab(LPCTSTR title);
@@ -175,9 +176,14 @@ private:
 	CComPtr<ITravelLogStg>	m_spTravelLogStg;
 	CComPtr<ISearchBoxInfo>	m_spSearchBoxInfo;
 
+	// for DragDrop
 	bool		m_bLeftButton;
-	CString		m_strDraggingDrive;
+	int			m_DragItemDriveNumber;
 	bool		m_bDragAccept;
+	bool		m_bDragItemIncludeFolder;
+	bool		m_bDragItemIsRoot;
+
+
 	bool		m_bTabChanging;			// É^ÉuêÿÇËë÷Ç¶íÜÇ©Ç«Ç§Ç©
 	bool		m_bTabChanged;
 	bool		m_bNavigateLockOpening;
@@ -210,6 +216,8 @@ private:
 
 	CNotifyWindow	m_wndNotify;
 	int				m_nInsertIndex;
+
+	CToolTipCtrl	m_tipDragOver;
 };
 
 

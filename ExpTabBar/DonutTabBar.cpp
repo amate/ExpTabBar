@@ -50,6 +50,7 @@ CDonutTabBar::CDonutTabBar()
 	, m_hSearch(NULL)
 	, m_wndNotify(this)
 	, m_nInsertIndex(-1)
+	, m_bDragItemIncludeFolder(false)
 {
 	m_vecHistoryItem.reserve(20);
 }
@@ -1224,11 +1225,34 @@ DROPEFFECT CDonutTabBar::OnDragEnter(IDataObject *pDataObject, DWORD dwKeyState,
 		STGMEDIUM	medium;
 		hr = pDataObject->GetData(&fmt, &medium);
 		if (hr == S_OK) {
+			/* ドラッグアイテムがフォルダを含んでいるかどうか */
+			m_bDragItemIncludeFolder = false;
 			LPIDA pida = (LPIDA)::GlobalLock(medium.hGlobal);
 			LPCITEMIDLIST pParentidl = GetPIDLFolder(pida);
-
-			CString str = GetFullPathFromIDList(pParentidl);
-			m_strDraggingDrive = str.Left(3);
+			for (UINT i = 0; i < pida->cidl; ++i) {
+				LPCITEMIDLIST pChildIDList = GetPIDLItem(pida, i);
+				LPITEMIDLIST	pidl = ::ILCombine(pParentidl, pChildIDList);
+				ATLASSERT(pidl);
+				if (ShellWrap::IsExistFolderFromIDList(pidl)) {
+					::ILFree(pidl);
+					m_bDragItemIncludeFolder = true;
+					break;
+				}
+				::ILFree(pidl);
+			}
+			/* ドラッグアイテムが ルートドライブ(ショートカットしか作れない)かどうか */
+			m_bDragItemIsRoot = false;
+			if (pida->cidl == 1) {
+				LPCITEMIDLIST pChildIDList = GetPIDLItem(pida, 0);
+				LPITEMIDLIST	pidl = ::ILCombine(pParentidl, pChildIDList);
+				CString strDragItemPath = ShellWrap::GetFullPathFromIDList(pidl);
+				::ILFree(pidl);
+				m_bDragItemIsRoot = ::PathIsRoot(strDragItemPath) != 0	// ドライブルート
+					|| strDragItemPath.Left(2) == _T("::")	// 特殊フォルダ
+					|| pidl->mkid.cb == 0;					// デスクトップ
+			}
+			/* ドラッグアイテムのドライブナンバーを取得 */
+			m_DragItemDriveNumber = ::PathGetDriveNumber(GetFullPathFromIDList(pParentidl));
 
 			::GlobalUnlock(medium.hGlobal);
 			::ReleaseStgMedium(&medium);
@@ -1241,6 +1265,39 @@ DROPEFFECT CDonutTabBar::OnDragEnter(IDataObject *pDataObject, DWORD dwKeyState,
 	return __super::OnDragEnter(pDataObject, dwKeyState, point);
 }
 
+void	SetDropDescription(IDataObject* pDataObject, DROPEFFECT dropEffect, LPCTSTR strMessage, LPCTSTR strInsert)
+{
+	FORMATETC format = { 
+		(CLIPFORMAT) ::RegisterClipboardFormat(CFSTR_DROPDESCRIPTION), 
+		NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL
+	};
+	STGMEDIUM storageMedium = { 0 };
+	storageMedium.tymed = TYMED_HGLOBAL;
+	storageMedium.hGlobal = ::GlobalAlloc(GHND, sizeof(DROPDESCRIPTION));
+	if (storageMedium.hGlobal) {
+		DROPDESCRIPTION* pDD = (DROPDESCRIPTION*) ::GlobalLock(storageMedium.hGlobal);
+
+		pDD->type = (DROPIMAGETYPE) dropEffect;
+		if (strMessage)
+			lstrcpyn(pDD->szMessage, strMessage, MAX_PATH);
+		if (strInsert)
+			lstrcpyn(pDD->szInsert, strInsert, MAX_PATH);
+
+		::GlobalUnlock(storageMedium.hGlobal);
+		pDataObject->SetData(&format, &storageMedium, TRUE);
+	}
+}
+
+void	SetDropDescription(IDataObject* pDataObject, DROPEFFECT dropEffect, LPCTSTR strPath)
+{
+	LPCWSTR	strMessage = L"%1";
+	switch (dropEffect) {
+	case DROPIMAGE_COPY:	strMessage = L"%1 へコピー";	break;
+	case DROPIMAGE_MOVE:	strMessage = L"%1 へ移動";	break;
+	case DROPIMAGE_LINK:	strMessage = L"%1 にリンクを作成";	break;
+	}
+	SetDropDescription(pDataObject, dropEffect, strMessage, strPath);
+}
 
 
 DROPEFFECT CDonutTabBar::OnDragOver(IDataObject *pDataObject, DWORD dwKeyState, CPoint point, DROPEFFECT dropOkEffect)
@@ -1252,25 +1309,56 @@ DROPEFFECT CDonutTabBar::OnDragOver(IDataObject *pDataObject, DWORD dwKeyState, 
 		}
 		
 		int nIndex = HitTest(point);
-		if (nIndex == -1) {
-			_DrawInsertionEdge(htOutside, nIndex);
-			return DROPEFFECT_COPY;	// タブの上にいなかったので新規タブ
-		}
-		
-		if (dwKeyState & MK_CONTROL) {
-			_DrawInsertionEdge(htItem, nIndex);
-			return DROPEFFECT_COPY;
-		} else if (dwKeyState & MK_SHIFT) {
-			_DrawInsertionEdge(htItem, nIndex);
-			return DROPEFFECT_MOVE;
+		if (nIndex == -1) {		// フォルダがタブ外にドラッグされている
+			_ClearInsertionEdge();
+			if (m_bDragItemIncludeFolder) {	
+				_DrawInsertionEdge(htOutside, nIndex);
+
+				SetDropDescription(pDataObject, DROPIMAGE_LABEL, _T("ここにタブを作成"));
+				return DROPEFFECT_LINK;
+			} else {
+				// フォルダ以外がドロップされている　もしかしたら後でここになにか作るかも
+				SetDropDescription(pDataObject, DROPIMAGE_INVALID, NULL, NULL);
+				return DROPEFFECT_NONE;
+			}
 		}
 
-		if (m_strDraggingDrive == GetItemFullPath(nIndex).Left(3)) {
-			_DrawInsertionEdge(htItem, nIndex);
-			return DROPEFFECT_MOVE;	// 同じドライブだったので移動
-		} else {
-			_DrawInsertionEdge(htItem, nIndex);
-			return DROPEFFECT_COPY;	// 違うドライブだったのでコピー
+		const CString& strTabFullPath = GetItemFullPath(nIndex); 
+		// ターゲットのタブが特殊フォルダなので無理
+		if (strTabFullPath.Left(2) == _T("::")) {
+			SetDropDescription(pDataObject, DROPIMAGE_INVALID, NULL, NULL);
+			_ClearInsertionEdge();
+			return DROPEFFECT_NONE;
+		}
+
+		_DrawInsertionEdge(htItem, nIndex);
+
+		const CString strTitle = ShellWrap::GetNameFromIDList(GetItemIDList(nIndex));
+		
+		// ドラッグしてるのはルートフォルダなのでリンク作成のみ
+		if (m_bDragItemIsRoot) {
+			SetDropDescription(pDataObject, DROPEFFECT_LINK, strTitle);
+			return DROPEFFECT_LINK;
+		}
+
+		if ( (dwKeyState & (MK_CONTROL | MK_SHIFT)) == (MK_CONTROL | MK_SHIFT) ) {
+			SetDropDescription(pDataObject, DROPEFFECT_LINK, strTitle);
+			return DROPEFFECT_LINK;
+		} else if (dwKeyState & MK_CONTROL) {			
+			SetDropDescription(pDataObject, DROPEFFECT_COPY, strTitle);
+			return DROPEFFECT_COPY;
+		} else if (dwKeyState & MK_SHIFT) {
+			SetDropDescription(pDataObject, DROPEFFECT_MOVE, strTitle);
+			return DROPEFFECT_MOVE;
+		}
+		// 同じドライブだったので移動
+		if (m_DragItemDriveNumber == ::PathGetDriveNumber(strTabFullPath)) {
+			SetDropDescription(pDataObject, DROPEFFECT_MOVE, strTitle);
+			return DROPEFFECT_MOVE;	
+
+		} else {	// 違うドライブだったのでコピー
+			SetDropDescription(pDataObject, DROPEFFECT_COPY, strTitle);
+			return DROPEFFECT_COPY;	
 		}
 	}
 
@@ -1327,9 +1415,10 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 			}
 			_ClearInsertionEdge();
 			return dropEffect;
-		}
 
-		if (m_bLeftButton == false) {	// 右ボタンでドロップされたとき
+		// どれかのタブにドロップされた
+		} else if (m_bLeftButton == false) {	
+			// 右ボタンでドロップされたとき、メニューを表示する
 			CComPtr<IShellFolder>	pShellFolder;
 			LPCITEMIDLIST	ppidlLast;
 			hr = ::SHBindToParent(GetItemIDList(nIndex), IID_IShellFolder, (LPVOID*)&pShellFolder, &ppidlLast);
@@ -1369,6 +1458,11 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 	return __super::OnDrop(pDataObject, dropEffect, dropEffectList, point);
 }
 
+void	CDonutTabBar::OnDragLeave()
+{
+	SetDropDescription(m_spDataObject, DROPIMAGE_INVALID, NULL, NULL);
+	__super::OnDragLeave();
+}
 
 
 
@@ -1619,6 +1713,10 @@ int		CDonutTabBar::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	/* ツールチップを作成 */
 	m_tipHistroy.Create(m_hWnd);
+
+	m_tipDragOver.Create(m_hWnd);
+	CToolInfo	ti(TTF_SUBCLASS | TTF_TRACK, m_hWnd, 1);
+	m_tipDragOver.AddTool(&ti);
 
 	LPCTSTR kls[] =  { _T("WorkerW"), _T("ReBarWindow32"), _T("UniversalSearchBand"), _T("Search Box"), _T("SearchEditBoxWrapperClass"), NULL };
 	const int ids[] = { 0, 0xA005, 0, 0, 0, -1 };
@@ -1993,22 +2091,52 @@ void CDonutTabBar::_SaveSelectedIndex(int nIndex)
 void	CDonutTabBar::_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObject* pDataObject, bool bMove)
 {
 	::CoInitialize(NULL);
-	HRESULT	hr;
-	CComPtr<IShellItem>	pShellItemTo;	// 送り先
-	hr = ::SHCreateItemFromIDList(pidlTo, IID_PPV_ARGS(&pShellItemTo));
-	if (hr == S_OK) {
-		CComPtr<IFileOperation>	pFileOperation;
-		hr = pFileOperation.CoCreateInstance(CLSID_FileOperation);
+
+	// リンクを作成する
+	if (::GetKeyState(VK_SHIFT) < 0 && ::GetKeyState(VK_CONTROL) < 0) {
+		HRESULT	hr;
+		FORMATETC	fmt;
+		fmt.cfFormat= RegisterClipboardFormat(CFSTR_SHELLIDLIST);
+		fmt.ptd		= NULL;
+		fmt.dwAspect= DVASPECT_CONTENT;
+		fmt.lindex	= -1;
+		fmt.tymed	= TYMED_HGLOBAL;
+
+		STGMEDIUM	medium;
+		hr = pDataObject->GetData(&fmt, &medium);
 		if (hr == S_OK) {
-			if (bMove){
-				hr = pFileOperation->MoveItems(pDataObject, pShellItemTo);
-			} else {
-				hr = pFileOperation->CopyItems(pDataObject, pShellItemTo);
-			}
-			if (hr == S_OK) {
-				hr = pFileOperation->PerformOperations();
+			CString strTargetFolder = ShellWrap::GetFullPathFromIDList(pidlTo);
+			LPIDA pida = (LPIDA)::GlobalLock(medium.hGlobal);
+			LPCITEMIDLIST pParentidl = GetPIDLFolder(pida);
+			for (UINT i = 0; i < pida->cidl; ++i) {
+				LPCITEMIDLIST pChildIDList = GetPIDLItem(pida, i);
+				LPITEMIDLIST	pidl = ::ILCombine(pParentidl, pChildIDList);
+				ATLASSERT(pidl);
+				CString strLinkName = ShellWrap::GetNameFromIDList(pidl);
+				strLinkName.Replace(L':', L'');
+				ShellWrap::CreateLinkFile(pidl, strTargetFolder + _T("\\") + strLinkName + _T(".lnk"));
+				::ILFree(pidl);
 			}
 		}
+	} else {
+
+		HRESULT	hr;
+		CComPtr<IShellItem>	pShellItemTo;	// 送り先
+		hr = ::SHCreateItemFromIDList(pidlTo, IID_PPV_ARGS(&pShellItemTo));
+		if (hr == S_OK) {
+			CComPtr<IFileOperation>	pFileOperation;
+			hr = pFileOperation.CoCreateInstance(CLSID_FileOperation);
+			if (hr == S_OK) {
+				if (bMove){
+					hr = pFileOperation->MoveItems(pDataObject, pShellItemTo);
+				} else {
+					hr = pFileOperation->CopyItems(pDataObject, pShellItemTo);
+				}
+				if (hr == S_OK) {
+					hr = pFileOperation->PerformOperations();
+				}
+			}
+		}		
 	}
 	pDataObject->Release();
 	::CoUninitialize();
