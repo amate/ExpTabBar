@@ -466,7 +466,7 @@ int		CExpTabBand::_HitTestDirectUI(CRect& rcItem)
 		int nIndex = -1;
 		int nCount = 0;
 		spUIElementArray->get_Length(&nCount);
-		for (int i = 0; i < nCount; ++i) {
+		for (int i = 0; i < nCount ; ++i) {
 			CComPtr<IUIAutomationElement>	spUIElm;
 			spUIElementArray->GetElement(i, &spUIElm);
 			BOOL	bOffScreen = FALSE;
@@ -476,7 +476,11 @@ int		CExpTabBand::_HitTestDirectUI(CRect& rcItem)
 			CRect rcUIItem;
 			spUIElm->get_CurrentBoundingRectangle(&rcUIItem);
 			if (rcUIItem.PtInRect(pt)) {	// Œ©‚Â‚©‚Á‚½
-				nIndex = i;
+				CComBSTR strId;
+				if (SUCCEEDED(spUIElm->get_CurrentAutomationId(&strId)) && strId)
+					nIndex = ::_wtoi(strId);
+				else
+					nIndex = i;
 
 				CComBSTR strItemNameDisplay = L"System.ItemNameDisplay";
 				CComVariant	vProp(strItemNameDisplay);

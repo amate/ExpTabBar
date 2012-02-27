@@ -200,7 +200,9 @@ bool	IsExistFolderFromIDList(PCIDLIST_ABSOLUTE pidl)
 	CString strFolderPath = GetFullPathFromIDList(pidl);
 	DWORD	dwAttributes = ::GetFileAttributes(strFolderPath);
 	if (   dwAttributes != -1 && dwAttributes & FILE_ATTRIBUTE_DIRECTORY
-		|| strFolderPath.GetLength() >= 3 && (strFolderPath.Mid(1) == _T(":\\") || strFolderPath.Left(3) == _T("::{"))) 
+		|| strFolderPath.GetLength() >= 3 
+		&& (strFolderPath.Mid(1) == _T(":\\") || strFolderPath.Left(3) == _T("::{"))
+		|| strFolderPath.Left(5) == _T("ŒŸõêŠ:") ) 
 	{
 		return true;
 	}

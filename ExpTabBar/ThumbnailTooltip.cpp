@@ -8,6 +8,9 @@
 #include "GdiplusUtil.h"
 #include "ShellWrap.h"
 #include "ExpTabBarOption.h"
+#include "Misc.h"
+
+using namespace Gdiplus;
 
 enum {
 	//kMaxImageCache = 64,
@@ -20,7 +23,7 @@ enum {
 };
 
 CThumbnailTooltip::CThumbnailTooltip()
-	: m_pNowImageData(nullptr)
+	: m_pNowImageData(nullptr), m_nFramePosition(0), m_TimerID(0)
 {
 	SetThemeClassList(VSCLASS_TOOLTIP);
 }
@@ -36,8 +39,16 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 {
 	if (CThumbnailTooltipConfig::s_bMaxThumbnailSizeChanged) {
 		// 作成するサムネイルの大きさが変わったのでキャッシュをクリアする
+		for (auto it = m_mapImageCache.begin(); it != m_mapImageCache.end(); ++it)
+			delete it->second.thumbnail;
 		m_mapImageCache.clear();
 		CThumbnailTooltipConfig::s_bMaxThumbnailSizeChanged = false;
+	}
+
+	m_nFramePosition = 0;
+	if (m_TimerID) {
+		KillTimer(m_TimerID);
+		m_TimerID = 0;
 	}
 
 	auto it = m_mapImageCache.find(path);
@@ -49,12 +60,36 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		if (bmpRaw) {
 			imgdata.ActualSize = _CalcActualSize(bmpRaw.get());
 
-			/* サムネイル作成 */
-			Gdiplus::Graphics	graphics(m_hWnd);
-			imgdata.thumbnail = new Gdiplus::Bitmap(imgdata.ActualSize.cx, imgdata.ActualSize.cy, &graphics);
-			Gdiplus::Graphics	graphicsTarget(imgdata.thumbnail);
-			graphicsTarget.SetInterpolationMode(Gdiplus::InterpolationModeBilinear);
-			graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
+			if (Misc::GetPathExtention(path.c_str()).CompareNoCase(_T("gif")) == 0) {
+				GUID	guid;
+				bmpRaw->GetFrameDimensionsList(&guid, 1);
+				UINT	FrameCount = bmpRaw->GetFrameCount(&guid);
+				if (FrameCount > 1) {
+					imgdata.bGifAnimation = true;
+					imgdata.dimentionID	= guid;
+					imgdata.nFrameCount = FrameCount;
+
+					UINT	propItemSize = bmpRaw->GetPropertyItemSize(PropertyTagFrameDelay);
+					PropertyItem*	propItems = (PropertyItem*)new BYTE[propItemSize];
+					bmpRaw->GetPropertyItem(PropertyTagFrameDelay, propItemSize, propItems);
+					for (UINT i = 0; i < FrameCount; ++i) {
+						int nDelay = ((long*)propItems->value)[i] * 10;
+						if (nDelay == 0)
+							nDelay = 100;
+						imgdata.vecDelayTime.push_back(nDelay);
+					}
+					delete propItems;
+					imgdata.thumbnail	= bmpRaw.release();
+				}
+			}
+			if (imgdata.bGifAnimation == false) {
+				/* サムネイル作成 */
+				Gdiplus::Graphics	graphics(m_hWnd);
+				imgdata.thumbnail = new Gdiplus::Bitmap(imgdata.ActualSize.cx, imgdata.ActualSize.cy, &graphics);
+				Gdiplus::Graphics	graphicsTarget(imgdata.thumbnail);
+				graphicsTarget.SetInterpolationMode(Gdiplus::InterpolationModeBilinear);
+				graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
+			}
 
 			//imgdata.thumbnail = bmpRaw->GetThumbnailImage(imgdata.ActualSize.cx, imgdata.ActualSize.cy);
 			imgdata.strInfoTipText = ShellWrap::GetInfoTipText(path.c_str());
@@ -72,6 +107,10 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		CRect rcTooltip = _CalcTooltipRect(rcItem, *m_pNowImageData);
 		MoveWindow(&rcTooltip);
 
+		if (m_pNowImageData->bGifAnimation) {
+			m_TimerID = SetTimer(1, m_pNowImageData->vecDelayTime[0]);
+		}
+
 		Invalidate(FALSE);
 		SetWindowPos(HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOCOPYBITS);
 		ShowWindow(SW_SHOWNOACTIVATE);
@@ -86,6 +125,11 @@ void	CThumbnailTooltip::HideThumbnailTooltip()
 		return ;
 
 	ShowWindow(FALSE);
+
+	if (m_TimerID) {
+		KillTimer(m_TimerID);
+		m_TimerID = 0;
+	}
 
 	m_pNowImageData = nullptr;
 }
@@ -118,8 +162,12 @@ void CThumbnailTooltip::DoPaint(CDCHandle dc)
 	if (m_pNowImageData->thumbnail) {
 		using namespace Gdiplus;
 		Graphics	graphics(dc);
-		graphics.DrawImage(m_pNowImageData->thumbnail, (REAL)kBoundMargin,(REAL)kBoundMargin/*,
-			(REAL)m_pNowImageData->ActualSize.cx,(REAL)m_pNowImageData->ActualSize.cy*/);
+		if (m_pNowImageData->bGifAnimation) {
+			m_pNowImageData->thumbnail->SelectActiveFrame(&m_pNowImageData->dimentionID, m_nFramePosition);
+		}
+		graphics.DrawImage(m_pNowImageData->thumbnail, 
+			(REAL)kBoundMargin, (REAL)kBoundMargin,
+			(REAL)m_pNowImageData->ActualSize.cx, (REAL)m_pNowImageData->ActualSize.cy);
 	}
 }
 
@@ -139,6 +187,17 @@ int CThumbnailTooltip::OnCreate(LPCREATESTRUCT lpCreateStruct)
 void CThumbnailTooltip::OnSize(UINT nType, CSize size)
 {
 	SetWindowRgn(CreateRoundRectRgn( 0, 0, size.cx, size.cy, 3, 3 ), true);
+}
+
+void CThumbnailTooltip::OnTimer(UINT_PTR nIDEvent)
+{
+	if (nIDEvent == 1 && m_pNowImageData) {
+		++m_nFramePosition;
+		if (m_nFramePosition == m_pNowImageData->nFrameCount)
+			m_nFramePosition = 0;
+		m_TimerID = SetTimer(1, m_pNowImageData->vecDelayTime[m_nFramePosition]);
+		Invalidate(FALSE);
+	}
 }
 
 
