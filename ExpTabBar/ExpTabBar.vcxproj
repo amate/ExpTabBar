@@ -202,7 +202,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <RegisterOutput>true</RegisterOutput>
     </Link>
     <PreBuildEvent>
       <Command>$(SolutionDir)ExplorerClose.exe</Command>
@@ -246,7 +245,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <RegisterOutput>true</RegisterOutput>
     </Link>
     <PreBuildEvent>
       <Command>$(SolutionDir)ExplorerClose.exe</Command>

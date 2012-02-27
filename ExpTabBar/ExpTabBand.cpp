@@ -351,6 +351,10 @@ void	CExpTabBand::OnListViewMouseHover(WPARAM wParam, CPoint ptPos)
 
 void	CExpTabBand::OnListViewKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
+	SetMsgHandled(FALSE);
+	if (nChar != VK_UP && nChar != VK_DOWN && nChar != VK_LEFT && nChar != VK_RIGHT)
+		return ;
+
 	CRect rcItem;
 	int nIndex = -1;
 	bool bListView = m_ListView.m_hWnd != NULL;
