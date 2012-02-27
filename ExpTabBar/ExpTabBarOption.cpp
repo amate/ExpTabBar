@@ -380,6 +380,7 @@ void	CFavoritesOption::LoadConfig()
 				if (base64data.GetLength() > 0) {
 					int nLength = ::Base64DecodeGetRequiredLength(base64data.GetLength());
 					itemdata.pidl	= (LPITEMIDLIST)::CoTaskMemAlloc(nLength);
+					::SecureZeroMemory((PVOID)itemdata.pidl, nLength);
 					::Base64Decode(base64data, base64data.GetLength(), (BYTE*)itemdata.pidl, &nLength);
 				}
 				CIcon icon = ShellWrap::CreateIconFromIDList(itemdata.pidl);
