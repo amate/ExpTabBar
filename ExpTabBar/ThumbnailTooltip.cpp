@@ -5,7 +5,6 @@
 
 #include "stdafx.h"
 #include "ThumbnailTooltip.h"
-#include <boost\thread.hpp>
 #include "GdiplusUtil.h"
 #include "ShellWrap.h"
 #include "ExpTabBarOption.h"

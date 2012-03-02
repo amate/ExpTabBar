@@ -56,7 +56,7 @@ BEGIN_SINK_MAP(CExpTabBand)
 END_SINK_MAP()
 
 
-BEGIN_MSG_MAP(CExpTabBand)
+BEGIN_MSG_MAP_EX(CExpTabBand)
 ALT_MSG_MAP(1)
 	NOTIFY_CODE_HANDLER_EX(LVN_ITEMCHANGED, OnListViewItemChanged)
 	//NOTIFY_CODE_HANDLER_EX(TTN_SHOW, OnListViewGetDispInfo)
@@ -67,7 +67,7 @@ ALT_MSG_MAP(2)	// SysListView32
 		MSG_WM_MOUSEMOVE( OnListViewMouseMove )
 		MSG_WM_MOUSELEAVE( OnListViewMouseLeave )
 		MSG_WM_MOUSEHOVER( OnListViewMouseHover )
-		MSG_WM_KEYUP	 ( OnListViewKeyUp	)
+		MSG_WM_KEYDOWN	 ( OnListViewKeyUp	)
 		MSG_WM_KILLFOCUS ( OnListViewKillFocus )
 	}
 ALT_MSG_MAP(3)	// DirectUI
@@ -76,15 +76,12 @@ ALT_MSG_MAP(3)	// DirectUI
 		MSG_WM_MOUSEMOVE( OnListViewMouseMove )
 		MSG_WM_MOUSELEAVE( OnListViewMouseLeave )
 		MSG_WM_MOUSEHOVER( OnListViewMouseHover )
-		MSG_WM_KEYUP	 ( OnListViewKeyUp	)
+		MSG_WM_KEYDOWN	 ( OnListViewKeyUp	)
 		MSG_WM_KILLFOCUS ( OnListViewKillFocus )
 	}
 ALT_MSG_MAP(5)
 	MSG_WM_LBUTTONDBLCLK( OnTabBarLButtonDblClk	)
 END_MSG_MAP()
-
-	BOOL IsMsgHandled() const { return FALSE; }	//
-	void SetMsgHandled(_In_ BOOL bHandled) { }	// アサートが出るので何もしないようにする
 
 
 // Interfaces
