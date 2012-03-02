@@ -43,6 +43,9 @@ bool	CreateLinkFile(LPITEMIDLIST pidl, LPCTSTR saveFilePath);
 /// アイテムＩＤリストで示されるフォルダが存在するかどうか
 bool	IsExistFolderFromIDList(PCIDLIST_ABSOLUTE pidl);
 
+/// IDataObject内のITEMIDLISTを返します
+std::vector<PIDLIST_ABSOLUTE>	GetIDListFromDataObject(IDataObject* pDataObject);
+
 LPBYTE	GetByteArrayFromBinary(int nSize, std::wstring strBinary);
 
 

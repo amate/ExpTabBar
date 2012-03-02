@@ -424,15 +424,11 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 		LPITEMIDLIST pidlSelectedItem = ::ILCombine(pidlFolder, pidlChild);
 
 		// ƒŠƒ“ƒN‚Í‰ðŒˆ‚·‚é
-		CComPtr<IShellItem>	spShellItem;
-		hr = ::SHCreateItemFromIDList(pidlSelectedItem, IID_IShellItem, (LPVOID*)&spShellItem);
-		if (hr == S_OK) {
-			SFGAOF	attribute;
-			spShellItem->GetAttributes(SFGAO_LINK, &attribute);
-			if (attribute & SFGAO_LINK) {
-				LPITEMIDLIST	pidlLink = ShellWrap::GetResolveIDList(pidlSelectedItem);
-				if (pidlLink)
-					m_wndTabBar.OnTabCreate(pidlLink, false, false, true);
+		CString strFullPath = ShellWrap::GetFullPathFromIDList(pidlSelectedItem);
+		if (Misc::GetPathExtention(strFullPath).CompareNoCase(_T("lnk")) == 0) {
+			LPITEMIDLIST	pidlLink = ShellWrap::GetResolveIDList(pidlSelectedItem);
+			if (pidlLink) {
+				m_wndTabBar.OnTabCreate(pidlLink, false, false, true);
 				::ILFree(pidlSelectedItem);
 				pidlSelectedItem = nullptr;
 			}
@@ -450,7 +446,7 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 	}
 }
 
-#pragma comment(lib, "Winmm.lib")
+
 
 void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 {

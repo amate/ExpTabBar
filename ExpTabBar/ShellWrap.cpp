@@ -6,7 +6,7 @@
 #include "stdafx.h"
 #include "ShellWrap.h"
 #include <boost/tokenizer.hpp>
-
+#include "OleDragDropTabCtrl.h"
 
 namespace ShellWrap
 {
@@ -215,6 +215,34 @@ bool	IsExistFolderFromIDList(PCIDLIST_ABSOLUTE pidl)
 	}
 	return false;
 #endif
+}
+
+/// IDataObject“à‚ÌITEMIDLIST‚ð•Ô‚µ‚Ü‚·
+std::vector<PIDLIST_ABSOLUTE>	GetIDListFromDataObject(IDataObject* pDataObject)
+{
+	std::vector<PIDLIST_ABSOLUTE>	vec;
+	HRESULT	hr;
+	FORMATETC	fmt;
+	fmt.cfFormat= RegisterClipboardFormat(CFSTR_SHELLIDLIST);
+	fmt.ptd		= NULL;
+	fmt.dwAspect= DVASPECT_CONTENT;
+	fmt.lindex	= -1;
+	fmt.tymed	= TYMED_HGLOBAL;
+
+	STGMEDIUM	medium;
+	hr = pDataObject->GetData(&fmt, &medium);
+	if (hr == S_OK) {
+		LPIDA pida = (LPIDA)::GlobalLock(medium.hGlobal);
+		LPCITEMIDLIST pParentidl = GetPIDLFolder(pida);
+		vec.reserve(pida->cidl);
+		for (UINT i = 0; i < pida->cidl; ++i) {
+			LPCITEMIDLIST pChildIDList = GetPIDLItem(pida, i);
+			LPITEMIDLIST	pidl = ::ILCombine(pParentidl, pChildIDList);
+			ATLASSERT(pidl);
+			vec.push_back(pidl);
+		}
+	}
+	return vec;
 }
 
 LPBYTE	GetByteArrayFromBinary(int nSize, std::wstring strBinary)

@@ -1399,12 +1399,11 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 							LPITEMIDLIST	pidlLink = ShellWrap::GetResolveIDList(pidl);
 							if (pidlLink) {
 								OnTabCreate(pidlLink, true);
+							} else if (attribute & SFGAO_FOLDER) {
+								OnTabCreate(pidl, true);
 							}
-							::CoTaskMemFree(pidl);
-
 						} else if (attribute & SFGAO_FOLDER) {
 							OnTabCreate(pidl, true);
-							continue;
 						}
 					} else {
 						::CoTaskMemFree(pidl);
@@ -2091,33 +2090,23 @@ void	CDonutTabBar::_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObjec
 {
 	::CoInitialize(NULL);
 
+	auto vecIDList = ShellWrap::GetIDListFromDataObject(pDataObject);
 	// ÉäÉìÉNÇçÏê¨Ç∑ÇÈ
-	if (::GetKeyState(VK_SHIFT) < 0 && ::GetKeyState(VK_CONTROL) < 0) {
-		HRESULT	hr;
-		FORMATETC	fmt;
-		fmt.cfFormat= RegisterClipboardFormat(CFSTR_SHELLIDLIST);
-		fmt.ptd		= NULL;
-		fmt.dwAspect= DVASPECT_CONTENT;
-		fmt.lindex	= -1;
-		fmt.tymed	= TYMED_HGLOBAL;
-
-		STGMEDIUM	medium;
-		hr = pDataObject->GetData(&fmt, &medium);
-		if (hr == S_OK) {
-			CString strTargetFolder = ShellWrap::GetFullPathFromIDList(pidlTo);
-			LPIDA pida = (LPIDA)::GlobalLock(medium.hGlobal);
-			LPCITEMIDLIST pParentidl = GetPIDLFolder(pida);
-			for (UINT i = 0; i < pida->cidl; ++i) {
-				LPCITEMIDLIST pChildIDList = GetPIDLItem(pida, i);
-				LPITEMIDLIST	pidl = ::ILCombine(pParentidl, pChildIDList);
-				ATLASSERT(pidl);
-				CString strLinkName = ShellWrap::GetNameFromIDList(pidl);
-				strLinkName.Replace(L':', L'');
-				ShellWrap::CreateLinkFile(pidl, strTargetFolder + _T("\\") + strLinkName + _T(".lnk"));
-				::ILFree(pidl);
-			}
+	if (  (::GetKeyState(VK_SHIFT) < 0 && ::GetKeyState(VK_CONTROL) < 0)
+		|| vecIDList.size() == 1 && ShellWrap::GetFullPathFromIDList(vecIDList[0]).Left(2) == _T("::"))
+	{
+		CString strTargetFolder = ShellWrap::GetFullPathFromIDList(pidlTo);
+		for (auto it = vecIDList.begin(); it != vecIDList.end(); ++it) {
+			LPITEMIDLIST pidl = *it;
+			CString strLinkName = ShellWrap::GetNameFromIDList(pidl);
+			strLinkName.Replace(L':', L'');
+			ShellWrap::CreateLinkFile(pidl, strTargetFolder + _T("\\") + strLinkName + _T(".lnk"));
+			::ILFree(pidl);
 		}
 	} else {
+		std::for_each(vecIDList.begin(), vecIDList.end(), [](LPITEMIDLIST pidl) {
+			::ILFree(pidl);
+		});
 
 		HRESULT	hr;
 		CComPtr<IShellItem>	pShellItemTo;	// ëóÇËêÊ
