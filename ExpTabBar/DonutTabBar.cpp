@@ -51,6 +51,7 @@ CDonutTabBar::CDonutTabBar()
 	, m_wndNotify(this)
 	, m_nInsertIndex(-1)
 	, m_bDragItemIncludeFolder(false)
+	, m_pExpTabBandMessageMap(nullptr)
 {
 	m_vecHistoryItem.reserve(20);
 }
@@ -59,7 +60,7 @@ CDonutTabBar::~CDonutTabBar()
 {
 }
 
-void	CDonutTabBar::Initialize(IUnknown* punk)
+void	CDonutTabBar::Initialize(IUnknown* punk, CMessageMap* pMap)
 {
 	ATLASSERT(punk);
 	CComQIPtr<IServiceProvider>	spServiceProvider(punk);
@@ -74,6 +75,8 @@ void	CDonutTabBar::Initialize(IUnknown* punk)
 
 	spServiceProvider->QueryService(SID_SSearchBoxInfo, &m_spSearchBoxInfo);
 	ATLASSERT(m_spSearchBoxInfo);
+
+	m_pExpTabBandMessageMap = pMap;
 }
 
 
@@ -1714,10 +1717,6 @@ int		CDonutTabBar::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	/* ツールチップを作成 */
 	m_tipHistroy.Create(m_hWnd);
 
-	m_tipDragOver.Create(m_hWnd);
-	CToolInfo	ti(TTF_SUBCLASS | TTF_TRACK, m_hWnd, 1);
-	m_tipDragOver.AddTool(&ti);
-
 	LPCTSTR kls[] =  { _T("WorkerW"), _T("ReBarWindow32"), _T("UniversalSearchBand"), _T("Search Box"), _T("SearchEditBoxWrapperClass"), NULL };
 	const int ids[] = { 0, 0xA005, 0, 0, 0, -1 };
 	m_hSearch = FindChildWindowIDRecursive(GetTopLevelWindow(), kls, ids);
@@ -1874,11 +1873,11 @@ void	CDonutTabBar::OnMenuSelect(UINT nItemID, UINT nFlags, CMenuHandle menu)
 // ダブルクリック
 void	CDonutTabBar::OnLButtonDblClk(UINT nFlags, CPoint point)
 {
-	SetMsgHandled(FALSE);
-
 	int nIndex = HitTest(point);
 	if (nIndex != -1)
 		_ExeCommand(nIndex, CTabBarConfig::s_DblClickCommand);
+	else
+		SetMsgHandled(FALSE);
 }
 
 // ホイールクリック(ミドルクリック)

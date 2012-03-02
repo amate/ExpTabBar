@@ -6,6 +6,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <atlsync.h>
 
 namespace Gdiplus {
 	class Image;
@@ -36,6 +37,9 @@ public:
 	bool	ShowThumbnailTooltip(std::wstring path, CRect rcItem);
 	void	HideThumbnailTooltip();
 
+	void	AddThumbnailCache(LPCTSTR strPath);
+	void	OnLocationChanged();
+
 	// Overrides
 	void DoPaint(CDCHandle dc);
 
@@ -55,6 +59,7 @@ private:
 	CRect	_CalcTooltipRect(const CRect& rcItem, const ImageData& ImageData);
 	CSize	_CalcActualSize(Gdiplus::Image* image);
 	int		_CalcInfoTipTextHeight(const ImageData& ImageData);
+	std::unique_ptr<ImageData>	_CreateImageData(LPCTSTR strPath);
 	void	_ClearImageCache();
 
 	// Data members
@@ -63,7 +68,9 @@ private:
 	UINT		m_nFramePosition;
 	UINT_PTR	m_TimerID;
 
-	std::unordered_map<std::wstring, ImageData>	m_mapImageCache;
+	std::unordered_map<std::wstring, ImageData*>	m_mapImageCache;
+	CCriticalSection	m_cs;
+	bool	m_bAddImageCached;
 };
 
 

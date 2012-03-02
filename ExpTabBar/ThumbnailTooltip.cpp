@@ -5,6 +5,7 @@
 
 #include "stdafx.h"
 #include "ThumbnailTooltip.h"
+#include <boost\thread.hpp>
 #include "GdiplusUtil.h"
 #include "ShellWrap.h"
 #include "ExpTabBarOption.h"
@@ -23,7 +24,7 @@ enum {
 };
 
 CThumbnailTooltip::CThumbnailTooltip()
-	: m_pNowImageData(nullptr), m_nFramePosition(0), m_TimerID(0)
+	: m_pNowImageData(nullptr), m_nFramePosition(0), m_TimerID(0), m_bAddImageCached(false)
 {
 	SetThemeClassList(VSCLASS_TOOLTIP);
 }
@@ -46,64 +47,26 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		KillTimer(m_TimerID);
 		m_TimerID = 0;
 	}
-
+	CCritSecLock	lock(m_cs);
 	auto it = m_mapImageCache.find(path);
 	if (it != m_mapImageCache.end()) {
-		m_pNowImageData = &it->second;
+		m_pNowImageData = it->second;
 	} else {
-		ImageData	imgdata;
-		std::unique_ptr<Gdiplus::Image> bmpRaw(Gdiplus::Bitmap::FromFile(path.c_str()));
-		if (bmpRaw) {
-			imgdata.ActualSize = _CalcActualSize(bmpRaw.get());
-
-			/* サムネイル作成 */
-			Gdiplus::Graphics	graphics(m_hWnd);
-			if (Misc::GetPathExtention(path.c_str()).CompareNoCase(_T("gif")) == 0) {
-				GUID	guid;
-				bmpRaw->GetFrameDimensionsList(&guid, 1);
-				UINT	FrameCount = bmpRaw->GetFrameCount(&guid);
-				if (FrameCount > 1) {
-					imgdata.bGifAnimation = true;
-					imgdata.nFrameCount = FrameCount;
-					imgdata.vecGifImage.reserve(FrameCount);
-
-					UINT	propItemSize = bmpRaw->GetPropertyItemSize(PropertyTagFrameDelay);
-					PropertyItem*	propItems = (PropertyItem*)new BYTE[propItemSize];
-					bmpRaw->GetPropertyItem(PropertyTagFrameDelay, propItemSize, propItems);
-					for (UINT i = 0; i < FrameCount; ++i) {
-						int nDelay = ((long*)propItems->value)[i] * 10;
-						if (nDelay == 0)
-							nDelay = 100;
-						imgdata.vecDelayTime.push_back(nDelay);
-
-						bmpRaw->SelectActiveFrame(&guid, i);
-						Gdiplus::Image* imgPage = new Gdiplus::Bitmap(imgdata.ActualSize.cx, imgdata.ActualSize.cy, &graphics);
-						Gdiplus::Graphics	graphicsTarget(imgPage);
-						graphicsTarget.SetInterpolationMode(Gdiplus::InterpolationModeBilinear);
-						graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
-						imgdata.vecGifImage.push_back(imgPage);
-					}
-					delete propItems;
-					//imgdata.thumbnail	= bmpRaw->Clone();
+		if (std::unique_ptr<ImageData> pdata = _CreateImageData(path.c_str())) {
+			// キャッシュのサイズを超えたので削除
+			if (m_bAddImageCached == false && m_mapImageCache.size() > CThumbnailTooltipConfig::s_nMaxThumbnailCache) {
+				ImageData& eraseData = *m_mapImageCache.begin()->second;
+				delete eraseData.thumbnail;
+				if (eraseData.bGifAnimation) {
+					std::for_each(eraseData.vecGifImage.begin(), eraseData.vecGifImage.end(), [](Gdiplus::Image* img) {
+						delete img;
+					});
 				}
-			}
-			if (imgdata.bGifAnimation == false) {
-				imgdata.thumbnail = new Gdiplus::Bitmap(imgdata.ActualSize.cx, imgdata.ActualSize.cy, &graphics);
-				Gdiplus::Graphics	graphicsTarget(imgdata.thumbnail);
-				graphicsTarget.SetInterpolationMode(Gdiplus::InterpolationModeBilinear);
-				graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
-			}
-
-			//imgdata.thumbnail = bmpRaw->GetThumbnailImage(imgdata.ActualSize.cx, imgdata.ActualSize.cy);
-			imgdata.strInfoTipText = ShellWrap::GetInfoTipText(path.c_str());
-			imgdata.nInfoTipHeight = _CalcInfoTipTextHeight(imgdata);
-	
-			if (m_mapImageCache.size() > CThumbnailTooltipConfig::s_nMaxThumbnailCache) {
-				delete m_mapImageCache.begin()->second.thumbnail;
+				delete m_mapImageCache.begin()->second;
 				m_mapImageCache.erase(m_mapImageCache.begin());
 			}
-			auto it = m_mapImageCache.insert(std::make_pair<std::wstring, ImageData>(path, imgdata));
-			m_pNowImageData = &it.first->second;
+			auto it = m_mapImageCache.insert(std::make_pair<std::wstring, ImageData*>(path, pdata.release()));
+			m_pNowImageData = it.first->second;
 		}
 	}
 	if (m_pNowImageData) {
@@ -135,6 +98,26 @@ void	CThumbnailTooltip::HideThumbnailTooltip()
 	}
 
 	m_pNowImageData = nullptr;
+}
+
+void	CThumbnailTooltip::AddThumbnailCache(LPCTSTR strPath)
+{
+	m_bAddImageCached = true;
+	auto it = m_mapImageCache.find(strPath);
+	if (it == m_mapImageCache.end()) {
+		if (std::unique_ptr<ImageData> pdata = _CreateImageData(strPath)) {
+			CCritSecLock	lock(m_cs);
+			m_mapImageCache.insert(std::make_pair<std::wstring, ImageData*>(strPath, pdata.release()));
+		}
+	}
+}
+
+void	CThumbnailTooltip::OnLocationChanged()
+{
+	if (m_bAddImageCached) {
+		_ClearImageCache();
+		m_bAddImageCached = false;
+	}
 }
 
 
@@ -275,17 +258,73 @@ int		CThumbnailTooltip::_CalcInfoTipTextHeight(const ImageData& ImageData)
 	
 }
 
+/// 明示的に strPath のイメージキャッシュを作成する
+std::unique_ptr<CThumbnailTooltip::ImageData>	CThumbnailTooltip::_CreateImageData(LPCTSTR strPath)
+{
+	std::unique_ptr<ImageData>	pdata(new ImageData);
+	ImageData&	imgdata = *pdata;
+	std::unique_ptr<Gdiplus::Image> bmpRaw(Gdiplus::Bitmap::FromFile(strPath));
+	if (bmpRaw) {
+		imgdata.ActualSize = _CalcActualSize(bmpRaw.get());
+
+		/* サムネイル作成 */
+		Gdiplus::Graphics	graphics(m_hWnd);
+		if (Misc::GetPathExtention(strPath).CompareNoCase(_T("gif")) == 0) {
+			GUID	guid;
+			bmpRaw->GetFrameDimensionsList(&guid, 1);
+			UINT	FrameCount = bmpRaw->GetFrameCount(&guid);
+			if (FrameCount > 1) {
+				imgdata.bGifAnimation = true;
+				imgdata.nFrameCount = FrameCount;
+				imgdata.vecGifImage.reserve(FrameCount);
+
+				UINT	propItemSize = bmpRaw->GetPropertyItemSize(PropertyTagFrameDelay);
+				PropertyItem*	propItems = (PropertyItem*)new BYTE[propItemSize];
+				bmpRaw->GetPropertyItem(PropertyTagFrameDelay, propItemSize, propItems);
+				for (UINT i = 0; i < FrameCount; ++i) {
+					int nDelay = ((long*)propItems->value)[i] * 10;
+					if (nDelay == 0)
+						nDelay = 100;
+					imgdata.vecDelayTime.push_back(nDelay);
+
+					bmpRaw->SelectActiveFrame(&guid, i);
+					Gdiplus::Image* imgPage = new Gdiplus::Bitmap(imgdata.ActualSize.cx, imgdata.ActualSize.cy, &graphics);
+					Gdiplus::Graphics	graphicsTarget(imgPage);
+					graphicsTarget.SetInterpolationMode(Gdiplus::InterpolationModeBilinear);
+					graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
+					imgdata.vecGifImage.push_back(imgPage);
+				}
+				delete propItems;
+				//imgdata.thumbnail	= bmpRaw->Clone();
+			}
+		}
+		if (imgdata.bGifAnimation == false) {
+			imgdata.thumbnail = new Gdiplus::Bitmap(imgdata.ActualSize.cx, imgdata.ActualSize.cy, &graphics);
+			Gdiplus::Graphics	graphicsTarget(imgdata.thumbnail);
+			graphicsTarget.SetInterpolationMode(Gdiplus::InterpolationModeBilinear);
+			graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
+		}
+
+		//imgdata.thumbnail = bmpRaw->GetThumbnailImage(imgdata.ActualSize.cx, imgdata.ActualSize.cy);
+		imgdata.strInfoTipText = ShellWrap::GetInfoTipText(strPath);
+		imgdata.nInfoTipHeight = _CalcInfoTipTextHeight(imgdata);
+	}
+	return pdata;
+}
+
+
 /// イメージキャッシュをクリアする
 void	CThumbnailTooltip::_ClearImageCache()
 {
-	std::for_each(m_mapImageCache.begin(), m_mapImageCache.end(), [](std::pair<std::wstring, ImageData> pr) {
-		ImageData& imgdata = pr.second;
+	std::for_each(m_mapImageCache.begin(), m_mapImageCache.end(), [](std::pair<std::wstring, ImageData*> pr) {
+		ImageData& imgdata = *pr.second;
 		delete imgdata.thumbnail;
 		if (imgdata.bGifAnimation) {
 			std::for_each(imgdata.vecGifImage.begin(), imgdata.vecGifImage.end(), [](Gdiplus::Image* img) {
 				delete img;
 			});
 		}
+		delete pr.second;
 	});
 	m_mapImageCache.clear();
 }

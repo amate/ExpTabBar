@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include "ExpTabBand.h"
 #include <boost/lexical_cast.hpp>
+#include <boost/thread.hpp>
 #include "ShellWrap.h"
 #include "GdiplusUtil.h"
 
@@ -151,7 +152,7 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		}
 
 
-		m_wndTabBar.Initialize(punkSite);
+		m_wndTabBar.Initialize(punkSite, this);
 
 		/* タブバー作成 */
 		m_wndTabBar.Create(hWndParent);
@@ -236,6 +237,7 @@ void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
 void CExpTabBand::OnTitleChange(BSTR title)
 {
 	m_wndTabBar.RefreshTab(title);
+	m_ThumbnailTooltip.OnLocationChanged();
 }
 
 
@@ -443,6 +445,49 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 		::ILFree(pidlChild);
 	}
 }
+
+#pragma comment(lib, "Winmm.lib")
+
+void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
+{
+	if (::GetKeyState(VK_CONTROL) < 0) {
+		std::vector<CString> vec;
+		CComPtr<IShellView>	spShellView;
+		m_spShellBrowser->QueryActiveShellView(&spShellView);
+		CComQIPtr<IFolderView>	spFolderView = spShellView;
+		if (spFolderView) {
+			int nCount = 0;
+			spFolderView->ItemCount(SVGIO_ALLVIEW, &nCount);
+			LPITEMIDLIST pidlFolder = ShellWrap::GetCurIDList(m_spShellBrowser);
+			for (int i = 0; i < nCount; ++i) {
+				LPITEMIDLIST pidlChild = nullptr;
+				spFolderView->Item(i, &pidlChild);
+				LPITEMIDLIST pidl = ::ILCombine(pidlFolder, pidlChild);
+				CString strPath = ShellWrap::GetFullPathFromIDList(pidl);
+				CString strExt = Misc::GetPathExtention(strPath);
+				strExt.MakeLower();
+				if (strExt == _T("jpg") || strExt == _T("jpeg") || strExt == _T("png") || strExt == _T("gif") || strExt == _T("bmp"))
+				{
+					vec.push_back(strPath);				
+				}
+				::ILFree(pidl);
+				::ILFree(pidlChild);
+			}
+			::ILFree(pidlFolder);
+
+			boost::thread	td([this, vec]() {
+				for (auto it = vec.begin(); it != vec.end(); ++it) {
+					if (::GetKeyState(VK_ESCAPE) < 0)
+						break;
+					m_ThumbnailTooltip.AddThumbnailCache(*it);
+				}
+			});
+		}
+	}
+}
+
+
+// private:
 
 int		CExpTabBand::_HitTestDirectUI(CRect& rcItem)
 {

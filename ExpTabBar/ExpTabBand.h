@@ -79,6 +79,8 @@ ALT_MSG_MAP(3)	// DirectUI
 		MSG_WM_KEYUP	 ( OnListViewKeyUp	)
 		MSG_WM_KILLFOCUS ( OnListViewKillFocus )
 	}
+ALT_MSG_MAP(5)
+	MSG_WM_LBUTTONDBLCLK( OnTabBarLButtonDblClk	)
 END_MSG_MAP()
 
 	BOOL IsMsgHandled() const { return FALSE; }	//
@@ -119,6 +121,8 @@ public:
 	void	OnListViewKillFocus(CWindow wndFocus);
 
 	void	OnParentNotify(UINT message, UINT nChildID, LPARAM lParam);
+
+	void	OnTabBarLButtonDblClk(UINT nFlags, CPoint point);
 
 private:
 	int		_HitTestDirectUI(CRect& rcItem);

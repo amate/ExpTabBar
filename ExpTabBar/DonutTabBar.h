@@ -58,7 +58,7 @@ public:
 	CDonutTabBar();
 	~CDonutTabBar();
 
-	void	Initialize(IUnknown* punk);
+	void	Initialize(IUnknown* punk, CMessageMap* pMap);
 
 	void	SaveAllTab();
 	void	RestoreAllTab();
@@ -114,6 +114,7 @@ public:
 		COMMAND_RANGE_HANDLER_EX( ID_FAVORITES_FIRST	, ID_FAVORITES_LAST, OnFavoritesOpen )
 		NOTIFY_CODE_HANDLER( TTN_GETDISPINFO, OnTooltipGetDispInfo )
 		CHAIN_MSG_MAP( COleDragDropTabCtrl<CDonutTabBar> )
+		CHAIN_MSG_MAP_ALT_MEMBER((*m_pExpTabBandMessageMap), 5)
 	END_MSG_MAP()
 
 
@@ -175,6 +176,7 @@ private:
 	CComPtr<IShellBrowser>	m_spShellBrowser;
 	CComPtr<ITravelLogStg>	m_spTravelLogStg;
 	CComPtr<ISearchBoxInfo>	m_spSearchBoxInfo;
+	CMessageMap*	m_pExpTabBandMessageMap;
 
 	// for DragDrop
 	bool		m_bLeftButton;
@@ -217,7 +219,6 @@ private:
 	CNotifyWindow	m_wndNotify;
 	int				m_nInsertIndex;
 
-	CToolTipCtrl	m_tipDragOver;
 };
 
 
