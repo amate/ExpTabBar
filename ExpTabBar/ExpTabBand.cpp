@@ -167,7 +167,8 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		ATLASSERT(m_spUIAutomation);
 
 		/* サムネイルツールチップ作成 */
-		m_ThumbnailTooltip.Create(NULL, rcDefault, NULL, WS_POPUP, WS_EX_TOOLWINDOW |  WS_EX_LAYERED | WS_EX_TRANSPARENT);
+		m_ThumbnailTooltip.Create(NULL, rcDefault, NULL, WS_POPUP, 
+			WS_EX_TOOLWINDOW |  WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST);
 		ATLASSERT( m_ThumbnailTooltip.IsWindow() );		
 		SetLayeredWindowAttributes(m_ThumbnailTooltip.m_hWnd, 0, 255, LWA_ALPHA);
 	}
@@ -271,8 +272,9 @@ LRESULT CExpTabBand::OnListViewGetDispInfo(LPNMHDR pnmh)
 		nIndex = _HitTestDirectUI(rcItem);
 	}
 
+
+	m_Tooltip = pnmh->hwndFrom;
 	if (nIndex != -1 && m_nIndexTooltip != nIndex) {
-		m_Tooltip = pnmh->hwndFrom;
 		_ShowThumbnailTooltip(nIndex, rcItem);
 	}
 
@@ -334,6 +336,9 @@ void	CExpTabBand::OnListViewMouseHover(WPARAM wParam, CPoint ptPos)
 		return ;	// キーボードでの移動
 	}
 
+	if (m_Tooltip.IsWindow() == FALSE)	// 初回は何もしない
+		return ;
+
 	CRect rcItem;
 	int nIndex = -1;
 	if (m_ListView.m_hWnd) {
@@ -389,7 +394,6 @@ void	CExpTabBand::OnListViewKillFocus(CWindow wndFocus)
 	SetMsgHandled(FALSE);
 	_HideThumbnailTooltip();
 }
-
 
 /// フォルダーをミドルクリックで新しいタブで開く
 void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
@@ -600,8 +604,9 @@ void	CExpTabBand::_HideThumbnailTooltip()
 {
 	m_ThumbnailTooltip.HideThumbnailTooltip();
 	m_nIndexTooltip = -1;
-	if (m_Tooltip.IsWindow())
+	if (m_Tooltip.IsWindow()) {
 		m_Tooltip.Activate(TRUE);
+	}
 }
 
 void	CExpTabBand::_TrackMouseLeave(HWND hWnd)

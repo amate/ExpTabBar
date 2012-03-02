@@ -24,7 +24,7 @@ public:
 		CString strInfoTipText;
 		int		nInfoTipHeight;
 		bool	bGifAnimation;
-		GUID	dimentionID;
+		std::vector<Gdiplus::Image*>	vecGifImage;
 		std::vector<int>				vecDelayTime;
 		UINT	nFrameCount;
 		ImageData() : thumbnail(nullptr), nInfoTipHeight(0), bGifAnimation(false), nFrameCount(0) { }
@@ -55,6 +55,7 @@ private:
 	CRect	_CalcTooltipRect(const CRect& rcItem, const ImageData& ImageData);
 	CSize	_CalcActualSize(Gdiplus::Image* image);
 	int		_CalcInfoTipTextHeight(const ImageData& ImageData);
+	void	_ClearImageCache();
 
 	// Data members
 	CFont	m_NoThemeFont;
