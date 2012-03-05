@@ -1,13 +1,14 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">
-    <LocalDebuggerCommand>
-    </LocalDebuggerCommand>
+    <LocalDebuggerCommand>C:\Windows\explorer.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>
-    </LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>::{20D04FE0-3AEA-1069-A2D8-08002B30309D}</LocalDebuggerCommandArguments>
+    <LocalDebuggerAttach>true</LocalDebuggerAttach>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|X64'">
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArguments>::{20D04FE0-3AEA-1069-A2D8-08002B30309D}</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommand>C:\Windows\explorer.exe </LocalDebuggerCommand>
   </PropertyGroup>
 </Project>

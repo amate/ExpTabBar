@@ -158,7 +158,7 @@
       </Command>
     </CustomBuildStep>
     <PostBuildEvent>
-      <Command>C:\Windows\explorer.exe ::{20D04FE0-3AEA-1069-A2D8-08002B30309D}</Command>
+      <Command>$(SolutionDir)ExplorerRun.bat</Command>
       <Message>explorer</Message>
     </PostBuildEvent>
     <PreBuildEvent>
@@ -167,6 +167,10 @@
     <PreBuildEvent>
       <Message>エクスプローラーを終了させる $(SolutionDir)ExplorerClose.exe</Message>
     </PreBuildEvent>
+    <PreLinkEvent>
+      <Command>
+      </Command>
+    </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
