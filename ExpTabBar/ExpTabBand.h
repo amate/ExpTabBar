@@ -108,7 +108,6 @@ public:
 	void __stdcall OnDocumentComplete(IDispatch* pDisp, VARIANT* URL);
     void __stdcall OnTitleChange(BSTR title);
 
-
 	LRESULT OnListViewItemChanged(LPNMHDR pnmh);
 	LRESULT OnListViewGetDispInfo(LPNMHDR pnmh);
 	void	OnListViewMouseMove(UINT nFlags, CPoint point);
@@ -130,6 +129,7 @@ private:
 	void	_HideThumbnailTooltip();
 	void	_TrackMouseLeave(HWND hWnd);
 	void	_TrackMouseHover(HWND hWnd);
+	void	_SetNoFullRowSelect();
 
 	// Data members
 	CDonutTabBar	m_wndTabBar;

@@ -1851,6 +1851,9 @@ void	CDonutTabBar::OnMenuSelect(UINT nItemID, UINT nFlags, CMenuHandle menu)
 	} else if (menu.m_hMenu == m_menuFavorites.m_hMenu) {
 		if (nFlags & MF_MOUSESELECT) {
 			int i = nItemID - ID_FAVORITES_FIRST;
+			const CString& strPath = CFavoritesOption::s_vecFavoritesItem[i].strPath;
+			if (strPath == FAVORITESSEPSTRING)
+				return ;
 			m_tipHistroy.UpdateTipText(CFavoritesOption::s_vecFavoritesItem[i].strPath.GetBuffer(), m_hWnd);
 
 			/* ƒgƒ‰ƒbƒN‚µ‚È‚¢ */

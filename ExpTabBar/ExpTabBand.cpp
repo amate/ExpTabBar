@@ -151,7 +151,6 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 			return E_FAIL;
 		}
 
-
 		m_wndTabBar.Initialize(punkSite, this);
 
 		/* タブバー作成 */
@@ -192,6 +191,7 @@ void CExpTabBand::OnNavigateComplete2(IDispatch* pDisp,VARIANT* URL)
 	CString strURL(*URL);
 	ATLTRACE(_T(" URL : %s\n"), strURL);
 	m_wndTabBar.NavigateComplete2(strURL);
+
 }
 
 void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
@@ -230,6 +230,7 @@ void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
 				}
 			}
 		}
+		_SetNoFullRowSelect();
 	}
 }
 
@@ -239,7 +240,6 @@ void CExpTabBand::OnTitleChange(BSTR title)
 	m_wndTabBar.RefreshTab(title);
 	m_ThumbnailTooltip.OnLocationChanged();
 }
-
 
 // Message map
 
@@ -256,7 +256,13 @@ LRESULT CExpTabBand::OnListViewItemChanged(LPNMHDR pnmh)
 	RECT rcItem;
 	m_ListView.GetItemRect(pnmlv->iItem, &rcItem, LVIR_ICON);
 	m_ListView.InvalidateRect(&rcItem);
-	ATLTRACE(_T("OnListViewItemChanged() : %d\n"), pnmlv->iItem);
+	int nIndex = m_ListView.GetNextItem(-1, LVIS_SELECTED);
+	do {
+		m_ListView.GetItemRect(nIndex, &rcItem, LVIR_ICON);
+		m_ListView.InvalidateRect(&rcItem);
+		nIndex = m_ListView.GetNextItem(nIndex, LVIS_SELECTED);
+	} while (nIndex != -1);
+
 	return 0;
 }
 
@@ -401,6 +407,7 @@ void	CExpTabBand::OnListViewKillFocus(CWindow wndFocus)
 	_HideThumbnailTooltip();
 }
 
+
 /// フォルダーをミドルクリックで新しいタブで開く
 void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 {
@@ -483,6 +490,8 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 				}
 			});
 		}
+	} else {
+		//_SetNoFullRowSelect();
 	}
 }
 
@@ -673,4 +682,46 @@ void	CExpTabBand::_TrackMouseHover(HWND hWnd)
 	m_bNowTrackMouseHover = true;
 }
 
+/// 設定されていれば一列選択表示をやめる
+void	CExpTabBand::_SetNoFullRowSelect()
+{
+	//if (CTabBarConfig::s_bNoFullRowSelect == false) {
+	//	return ;
+	//}
+	bool bNoFullRaw = CTabBarConfig::s_bNoFullRowSelect;
+	HRESULT	hr = S_OK;
+	//LPITEMIDLIST	pidl = ShellWrap::GetCurIDList(m_spShellBrowser);
+	//if (pidl) {
+	//	CString strURL = ShellWrap::GetFullPathFromIDList(pidl);
+	//	// "コンピューター"は一列表示にする
+	//	if (strURL == _T("::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"))
+	//		bNoFullRaw = false;
+	//	::ILFree(pidl);
+	//}
+	// "コンピューター"は一列表示にする
+	//if (strURL == _T("::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"))
+	//	bNoFullRaw = false;
+
+	CComQIPtr<IFolderViewOptions> spFolderOptions = m_spShellBrowser;
+	if (spFolderOptions) {
+		if (bNoFullRaw) {
+			hr = spFolderOptions->SetFolderViewOptions(FVO_VISTALAYOUT, FVO_VISTALAYOUT);
+		} else {
+			hr = spFolderOptions->SetFolderViewOptions(FVO_VISTALAYOUT, FVO_DEFAULT);
+		}
+	}
+
+	CComPtr<IDispatch>	spDisp;
+	m_spWebBrowser2->get_Document(&spDisp);
+	CComQIPtr<IShellFolderViewDual3>	spShellFolderView3 = spDisp;
+	if (spShellFolderView3) {
+		DWORD	dwFlags = 0;
+		spShellFolderView3->get_FolderFlags(&dwFlags);
+		if (bNoFullRaw)
+			dwFlags &= ~FWF_FULLROWSELECT;
+		else
+			dwFlags |= FWF_FULLROWSELECT;
+		spShellFolderView3->put_FolderFlags(dwFlags);
+	}
+}
 

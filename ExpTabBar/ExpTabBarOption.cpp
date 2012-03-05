@@ -36,6 +36,7 @@ int		CTabBarConfig::s_DblClickCommand	= TABCLOSE;
 int		CTabBarConfig::s_MClickCommand		= TABCLOSE;
 int		CTabBarConfig::s_nMaxHistoryCount	= 16;
 bool	CTabBarConfig::s_bMargeControlPanel = false;
+bool	CTabBarConfig::s_bNoFullRowSelect	= true;
 
 /// ê›íËÇì«Ç›çûÇﬁ
 void	CTabBarConfig::LoadConfig()
@@ -74,6 +75,8 @@ void	CTabBarConfig::LoadConfig()
 		s_nMaxHistoryCount	= value.get();
 	if (auto value = pt.get_optional<bool>("Tab.MargeControlPanel"))
 		s_bMargeControlPanel = value.get();
+	if (auto value = pt.get_optional<bool>("Tab.NoFullRowSelect"))
+		s_bNoFullRowSelect	= value.get();
 }
 
 /// ê›íËÇï€ë∂Ç∑ÇÈ
@@ -99,6 +102,7 @@ void	CTabBarConfig::SaveConfig()
 	pt.put("Tab.MClickCommand"		, s_MClickCommand);
 	pt.put("Tab.MaxHistoryCount"	, s_nMaxHistoryCount);
 	pt.put("Tab.MargeControlPanel"	, s_bMargeControlPanel);
+	pt.put("Tab.NoFullRowSelect"	, s_bNoFullRowSelect);
 
 	std::ofstream iniostream(g_szIniFileName, std::ios::out | std::ios::trunc);
 	write_ini(iniostream, pt);
@@ -137,6 +141,7 @@ public:
 		DDX_INT_RANGE(IDC_EDIT_MAXTEXTLENGTH	, s_nMaxTextLength	, 10, 125)
 		DDX_INT_RANGE(IDC_EDIT_MAXHISTORYCOUNT	, s_nMaxHistoryCount,  1,  50)
 		DDX_CHECK(IDC_CHECK_MARGECONTROLPANEL	, s_bMargeControlPanel	)
+		DDX_CHECK(IDC_CHECK_NOFULLROWSELECT		, s_bNoFullRowSelect	)
     END_DDX_MAP()
 	
 
