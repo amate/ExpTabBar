@@ -15,6 +15,7 @@
 #include <atlenc.h>
 #include "DonutFunc.h"
 #include "ShellWrap.h"
+#include "Version.h"
 
 using namespace boost::property_tree;
 
@@ -625,7 +626,9 @@ private:
 /// プロパティシートを表示
 INT_PTR	CExpTabBarOption::Show(HWND hWndParent)
 {
-	SetTitle(_T("ExpTabBarの設定"));
+	CString strTitle;
+	strTitle.Format(_T("ExpTabBar - version %s"), EXPTABBARVERSION);
+	SetTitle(strTitle);
 	m_psh.dwFlags |= PSH_NOAPPLYNOW | PSH_NOCONTEXTHELP;
 
 	CTabBarOptionPropertyPage	tabPage;

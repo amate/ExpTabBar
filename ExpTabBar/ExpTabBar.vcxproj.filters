@@ -138,6 +138,9 @@
     <ClInclude Include="GdiplusUtil.h">
       <Filter>ソース ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="Version.h">
+      <Filter>ソース ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ExpTabBar.rc">

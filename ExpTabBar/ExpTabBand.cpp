@@ -13,9 +13,11 @@ CExpTabBand::CExpTabBand() :
 	m_wndShellView(this, 1), 
 	m_wndListView(this, 2),
 	m_wndDirectUI(this, 3),
+	m_wndExplorer(this, 6),
 	m_nIndexTooltip(-1),
 	m_bNowTrackMouseLeave(false),
-	m_bNowTrackMouseHover(false)
+	m_bNowTrackMouseHover(false),
+	m_bRegisterServer(false)
 {
 	GdiplusInit();
 }
@@ -96,6 +98,9 @@ STDMETHODIMP CExpTabBand::ShowDW(BOOL fShow)
     //ツールバーのShowWindowを実行する
     //まだツールバーを作ってないので、何もしない
 	ATLTRACE(_T("ShowDW() : %s\n"), fShow ? _T("true") : _T("false"));
+	if (fShow == FALSE)	// 表示されるときはエクスプローラーにフォーカスが当たってるので登録しなくていい
+		_RegisterExecuteCommandVerb(false);	
+	_Register_openInTabLocalServer(fShow != 0);
     return S_OK;
 }
 
@@ -131,6 +136,11 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 			ATLASSERT(FALSE);
 			return E_FAIL;
 		}
+
+		m_wndExplorer.SubclassWindow(CWindow(hWndParent).GetTopLevelWindow());
+		if (m_wndExplorer == ::GetFocus() || m_wndExplorer.IsChild(::GetFocus()))
+			_RegisterExecuteCommandVerb(false);
+		_Register_openInTabLocalServer(true);
 		
 		CComQIPtr<IServiceProvider> pSP(punkSite);
 		ATLASSERT(pSP);
@@ -496,6 +506,14 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 }
 
 
+void	CExpTabBand::OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOther)
+{
+	SetMsgHandled(FALSE);
+
+	_RegisterExecuteCommandVerb(!(nState != WA_INACTIVE));
+}
+
+
 // private:
 
 int		CExpTabBand::_HitTestDirectUI(CRect& rcItem)
@@ -722,6 +740,40 @@ void	CExpTabBand::_SetNoFullRowSelect()
 		else
 			dwFlags |= FWF_FULLROWSELECT;
 		spShellFolderView3->put_FolderFlags(dwFlags);
+	}
+}
+
+
+void	CExpTabBand::_Register_openInTabLocalServer(bool bRegister)
+{
+	OSVERSIONINFO	osvi = { sizeof(osvi) };
+	GetVersionEx(&osvi);
+	if ( !(osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) )	// Win7以外
+		return ;
+	m_bRegisterServer	= bRegister;
+	CString openInTabExePath = Misc::GetExeDirectory() + _T("openInTab.exe");
+	::ShellExecute(NULL, NULL, openInTabExePath, bRegister ? _T("-Register") : _T("-UnRegister"), NULL, FALSE);
+}
+
+
+void	CExpTabBand::_RegisterExecuteCommandVerb(bool bRegister)
+{
+	OSVERSIONINFO	osvi = { sizeof(osvi) };
+	GetVersionEx(&osvi);
+	if ( !(osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) )	// Win7以外
+		return ;
+
+	if (m_bRegisterServer == false)
+		return ;
+
+	CRegKey	rkFolderCommand;
+	if (bRegister) {
+		if (rkFolderCommand.Create(HKEY_CURRENT_USER, _T("Software\\Classes\\Folder\\shell\\open\\command")) == ERROR_SUCCESS) {
+			rkFolderCommand.SetStringValue(_T("DelegateExecute"), OPENINPROCESSGUID);
+		}
+	} else {
+		if (rkFolderCommand.Open(HKEY_CURRENT_USER, _T("Software\\Classes\\Folder\\shell")) == ERROR_SUCCESS)
+			rkFolderCommand.RecurseDeleteKey(_T("open"));
 	}
 }
 

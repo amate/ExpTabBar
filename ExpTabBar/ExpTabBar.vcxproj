@@ -328,6 +328,7 @@
     <ClInclude Include="TabCtrlImpl.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="ThumbnailTooltip.h" />
+    <ClInclude Include="Version.h" />
     <ClInclude Include="XmlFile.h" />
   </ItemGroup>
   <ItemGroup>

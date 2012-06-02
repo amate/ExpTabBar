@@ -13,6 +13,8 @@
 
 #define SINKID_EVENTS	1234
 
+#define OPENINPROCESSGUID	_T("{597EEB5A-D2DD-46E1-8BD2-C03CF13B8C3E}")
+
 ////////////////////////////////////////////////////////////////////////////////
 // CExpTabBand
 
@@ -81,6 +83,8 @@ ALT_MSG_MAP(3)	// DirectUI
 	}
 ALT_MSG_MAP(5)
 	MSG_WM_LBUTTONDBLCLK( OnTabBarLButtonDblClk	)
+ALT_MSG_MAP(6)
+	MSG_WM_ACTIVATE( OnExplorerActivate	)
 END_MSG_MAP()
 
 
@@ -120,6 +124,8 @@ public:
 
 	void	OnTabBarLButtonDblClk(UINT nFlags, CPoint point);
 
+	void	OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOther);
+
 private:
 	int		_HitTestDirectUI(CRect& rcItem);
 	int		_HitTestListView(const CPoint& pt);
@@ -130,6 +136,8 @@ private:
 	void	_TrackMouseLeave(HWND hWnd);
 	void	_TrackMouseHover(HWND hWnd);
 	void	_SetNoFullRowSelect();
+	void	_Register_openInTabLocalServer(bool bRegister);
+	void	_RegisterExecuteCommandVerb(bool bRegister);
 
 	// Data members
 	CDonutTabBar	m_wndTabBar;
@@ -143,6 +151,7 @@ private:
 	CContainedWindow	m_wndShellView;
 	CContainedWindow	m_wndListView;
 	CContainedWindow	m_wndDirectUI;
+	CContainedWindow	m_wndExplorer;
 
 	CListViewCtrl		m_ListView;
 	CToolTipCtrl		m_Tooltip;
@@ -152,6 +161,7 @@ private:
 	CPoint	m_ptLastForMouseMove;
 
 	CThumbnailTooltip	m_ThumbnailTooltip;
+	bool	m_bRegisterServer;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(ExpTabBand), CExpTabBand)

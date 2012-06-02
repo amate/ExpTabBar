@@ -1547,11 +1547,13 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 		m_bNavigateLockOpening = true;
 		_SaveSelectedIndex(nCurIndex);
 		_RemoveOneBackLog();
-		_AddHistory(nCurIndex);	// 最近閉じたタブに追加する
+		if ((GetItemState(nCurIndex) & TCISTATE_NAVIGATELOCK) == 0)
+			_AddHistory(nCurIndex);	// 最近閉じたタブに追加する
 
 		SetCurSel(nIndex);
 
-		DeleteItem(nCurIndex);	// 削除する
+		if ((GetItemState(nCurIndex) & TCISTATE_NAVIGATELOCK) == 0)
+			DeleteItem(nCurIndex);	// 削除する
 		m_bNavigateLockOpening = false;
 		return;
 	}
@@ -1982,10 +1984,19 @@ void	CDonutTabBar::OnOpenUpFolder(UINT uNotifyCode, int nID, CWindow wndCtl)
 		LPITEMIDLIST pidl = ::ILClone(m_items[nIndex].m_pidl);
 		ILRemoveLastID(pidl);
 
-		m_nInsertIndex = nIndex;
-		int nNewIndex = OnTabCreate(pidl, false, true);
-		SetCurSel(nNewIndex);
-		m_nInsertIndex = -1;
+		/* すでに開いてるタブがあればそっちに移動する */
+		int nAlreadyIndex = _IDListIsEqualIndex(pidl);
+		if (nAlreadyIndex != -1 && nAlreadyIndex != nIndex) {
+			_SaveSelectedIndex(nIndex);
+
+			SetCurSel(nAlreadyIndex);
+
+		} else {
+			m_nInsertIndex = nIndex;
+			int nNewIndex = OnTabCreate(pidl, false, true);
+			SetCurSel(nNewIndex);
+			m_nInsertIndex = -1;
+		}
 	}
 }
 
