@@ -4,7 +4,7 @@
 #include "DonutTabBar.h"
 #include <atlenc.h>
 #include <UIAutomation.h>
-#include <boost/thread.hpp>
+#include <thread>
 #include "ShellWrap.h"
 #include "resource.h"
 #include "DonutFunc.h"
@@ -35,7 +35,10 @@ BOOL CNotifyWindow::OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct)
 	return TRUE;
 }
 
-
+LRESULT CNotifyWindow::OnIsMargeControlPanel(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	return CTabBarConfig::s_bMargeControlPanel;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1202,7 +1205,8 @@ HRESULT		CDonutTabBar::OnGetTabCtrlDataObject(CSimpleArray<int> arrIndex, IDataO
 void	CDonutTabBar::OnVoidTabRemove(const CSimpleArray<int>& arrCurDragItems)
 {
 	m_arrDragItems = arrCurDragItems;
-	boost::thread	thrd(boost::bind(&CDonutTabBar::_threadVoidTabRemove, this));
+	std::thread	thrd(std::bind(&CDonutTabBar::_threadVoidTabRemove, this));
+	thrd.detach();
 }
 
 
@@ -1453,7 +1457,8 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 			}
 		} else {	// 左ボタンでドロップされた場合
 			pDataObject->AddRef();
-			boost::thread	thrd(boost::bind(&CDonutTabBar::_threadPerformSHFileOperation, this, GetItemIDList(nIndex), pDataObject, dropEffect == DROPEFFECT_MOVE));
+			std::thread	thrd(std::bind(&CDonutTabBar::_threadPerformSHFileOperation, this, GetItemIDList(nIndex), pDataObject, dropEffect == DROPEFFECT_MOVE));
+			thrd.detach();
 		}
 	}
 	ESCAPE:
@@ -1485,28 +1490,22 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 
 	int nCurIndex = GetCurSel();
 	if (nCurIndex == -1) {	// タブが一つもないならエクスプローラーが起動したとする
-		
+		CString strFullPath = GetFullPathFromIDList(pidl);
+		if (   strFullPath.Left(5)  == _T("検索結果&")
+			|| (CTabBarConfig::s_bMargeControlPanel == false 
+				&& strFullPath.Left(40) == _T("::{26EE0668-A00A-44D7-9371-BEB064C98683}"))) 
+		{
+			m_bSaveAllTab = false;
+			_RefreshBandInfo();
+			::CoTaskMemFree(pidl);
+			return ;	// 検索結果表示は別ウィンドウにする
+		}
 		HWND hWndTarget = FindWindow(_T("ExpTabBar_NotifyWindow"), NULL);
 		if (hWndTarget != NULL) {	/* 他にもエクスプローラーが起動している */			
 			m_bSaveAllTab = false;
-			CString strFullPath = GetFullPathFromIDList(pidl);
-			if (   strFullPath.Left(5)  == _T("検索結果&")
-				|| (CTabBarConfig::s_bMargeControlPanel == false 
-				   && strFullPath.Left(40) == _T("::{26EE0668-A00A-44D7-9371-BEB064C98683}"))) 
-			{
-				_RefreshBandInfo();
-				::CoTaskMemFree(pidl);
-				return ;	// 検索結果表示は別ウィンドウにする
-			}
 
 			// 他のエクスプローラーにpidlが開かれたことを通知する
 			COPYDATASTRUCT	cd = { 0 };
-#if 0
-			CString strFullPath = GetFullPathFromIDList(pidl);			
-			Base64EncodeGetRequiredLength
-			cd.lpData = (LPVOID)(LPCTSTR)strFullPath;
-			cd.cbData = strFullPath.GetLength() * sizeof(TCHAR) + sizeof(TCHAR);
-#endif
 			UINT cbItemID = ::ILGetSize(pidl);
 			cd.lpData	= (LPVOID)pidl;
 			cd.cbData	= cbItemID;

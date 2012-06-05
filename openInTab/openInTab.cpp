@@ -32,6 +32,7 @@
 #include "RegisterExtension.h"
 #include <strsafe.h>
 #include <new>  // std::nothrow
+#include <assert.h>
 
 // Each ExecuteCommand handler needs to have a unique COM object, run UUIDGEN.EXE to
 // create new CLSID values for your handler. These handlers can implement multiple
@@ -42,6 +43,17 @@
 WCHAR const c_szVerbDisplayName[] = L"タブで開く2";
 
 #define EXPTABBAR_NOTIFYWINDOWCLASSNAME	L"ExpTabBar_NotifyWindow"
+
+#define	WM_ISMARGECONTROLPANEL	(WM_APP + 1)
+
+void	UnRegisterExecuteCommandVerb()
+{
+	HKEY hkey;
+	if (RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Classes\\Folder\\shell", 0, KEY_ALL_ACCESS, &hkey) == ERROR_SUCCESS) {
+		RegDeleteTree(hkey, L"open");
+		RegCloseKey(hkey);
+	}
+}
 
 class __declspec(uuid("597EEB5A-D2DD-46E1-8BD2-C03CF13B8C3E"))
     CExecuteCommandVerb : public IExecuteCommand,
@@ -154,6 +166,7 @@ public:
 	/// ExpTabBarに開かれるフォルダの情報を送る
     void OnAppCallback()
     {
+		//assert(FALSE);
 		HWND hWndNotify = ::FindWindow(EXPTABBAR_NOTIFYWINDOWCLASSNAME, NULL);
 		DWORD count = 0;
 		_psia->GetCount(&count);
@@ -161,13 +174,50 @@ public:
 			IShellItem2 *psi;
 			HRESULT hr = GetItemAt(_psia, i, IID_PPV_ARGS(&psi));
 			if (SUCCEEDED(hr)) {
+				PIDLIST_ABSOLUTE pidl = nullptr;
+				hr = ::SHGetIDListFromObject(psi, &pidl);
+				if (SUCCEEDED(hr) && pidl) {
+					LPWSTR strPath = nullptr;
+					hr = psi->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, &strPath);
+					auto funcRunExplorer = [&] () {
+						LPWSTR strWinFolder = nullptr;
+						hr = SHGetKnownFolderPath(FOLDERID_Windows, 0, NULL, &strWinFolder);
+						if (SUCCEEDED(hr)) {
+							WCHAR strExplorerPath[MAX_PATH];
+							StringCchPrintf(strExplorerPath, MAX_PATH, L"%s\\explorer.exe", strWinFolder);
+							::CoTaskMemFree(strWinFolder);
+							::ShellExecute(NULL, NULL, strExplorerPath, strPath, NULL, SW_NORMAL);
+						}
+					};
+					if (hWndNotify) {
+						if (::SendMessage(hWndNotify, WM_ISMARGECONTROLPANEL, 0, 0) != 0 ||		// コントローラーパネルを取り込む
+							wcsncmp(strPath, L"::{26EE0668-A00A-44D7-9371-BEB064C98683}", 40) != 0 ) {
+							COPYDATASTRUCT	cd = { 0 };
+							UINT cbItemID = ::ILGetSize(pidl);
+							cd.lpData	= (LPVOID)pidl;
+							cd.cbData	= cbItemID;
+							SendMessage(hWndNotify, WM_COPYDATA, NULL, (LPARAM)&cd);	
+							
+						} else {
+							funcRunExplorer();
+						}
+
+					} else {	// ExpTabBarが見つからない
+						UnRegisterExecuteCommandVerb();
+
+						funcRunExplorer();
+					}
+					::CoTaskMemFree(strPath);
+					::CoTaskMemFree(pidl);
+				}
+#if 0
 				LPWSTR strPath = nullptr;
 				hr = psi->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, &strPath);
 				if (SUCCEEDED(hr)) {
 					PIDLIST_ABSOLUTE pidl = nullptr;
 					DWORD dwAttr = 0;
-					hr = ::SHILCreateFromPath(strPath, &pidl, &dwAttr);
-					if (SUCCEEDED(hr)) {
+					pidl = ::ILCreateFromPath(strPath);
+					if (pidl) {
 						if (hWndNotify) {
 							COPYDATASTRUCT	cd = { 0 };
 							UINT cbItemID = ::ILGetSize(pidl);
@@ -175,12 +225,18 @@ public:
 							cd.cbData	= cbItemID;
 							SendMessage(hWndNotify, WM_COPYDATA, NULL, (LPARAM)&cd);
 							::CoTaskMemFree(pidl);
-						} else {
+
+						} else {	// ExpTabBarが見つからない
+							UnRegisterExecuteCommandVerb();
 							::ShellExecute(NULL, NULL, L"explorer", strPath, NULL, SW_NORMAL);
 						}
+					} else {	// パスからITEMIDLISTの作成に失敗
+						::ShellExecute(NULL, NULL, L"explorer", strPath, NULL, SW_NORMAL);
 					}
 					::CoTaskMemFree(strPath);
+				} else {
 				}
+#endif
 			}
 			psi->Release();
 		}
@@ -234,6 +290,15 @@ HRESULT CExecuteCommandVerb::Run()
 
 int APIENTRY wWinMain(HINSTANCE, HINSTANCE, PWSTR pszCmdLine, int)
 {
+	OSVERSIONINFO	osvi = { sizeof(osvi) };
+	GetVersionEx(&osvi);
+	if ( !(osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) ) {	// Win7以外
+		if (StrStrI(pszCmdLine, L"-Register") || StrStrI(pszCmdLine, L"-UnRegister"))
+			return 0;
+		MessageBox(NULL, L"Windows7以外では使えません", NULL, MB_ICONERROR);
+		return 0;
+	}
+
     HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     if (SUCCEEDED(hr))
     {
@@ -247,12 +312,7 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, PWSTR pszCmdLine, int)
         } else if (StrStrI(pszCmdLine, L"-UnRegister")) {
 			CRegisterExtension re(__uuidof(CExecuteCommandVerb));
 			re.UnRegisterObject();
-
-			HKEY hkey;
-			if (RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Classes\\Folder\\shell", 0, KEY_ALL_ACCESS, &hkey) == ERROR_SUCCESS) {
-				RegDeleteTree(hkey, L"open");
-				RegCloseKey(hkey);
-			}
+			UnRegisterExecuteCommandVerb();
 
 		} else if (StrStrI(pszCmdLine, L"-Register")) {
             CRegisterExtension re(__uuidof(CExecuteCommandVerb));

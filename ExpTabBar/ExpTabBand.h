@@ -85,6 +85,10 @@ ALT_MSG_MAP(5)
 	MSG_WM_LBUTTONDBLCLK( OnTabBarLButtonDblClk	)
 ALT_MSG_MAP(6)
 	MSG_WM_ACTIVATE( OnExplorerActivate	)
+ALT_MSG_MAP(7)	// addressbar progress
+	MSG_WM_PARENTNOTIFY( OnAddressBarProgressParentNotify )
+ALT_MSG_MAP(8)	// addressbar edit
+	MSG_WM_KEYDOWN( OnAddressBarEditKeyDown )
 END_MSG_MAP()
 
 
@@ -126,6 +130,10 @@ public:
 
 	void	OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOther);
 
+	void	OnAddressBarProgressParentNotify(UINT message, UINT nChildID, LPARAM lParam);
+
+	void	OnAddressBarEditKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags);
+
 private:
 	int		_HitTestDirectUI(CRect& rcItem);
 	int		_HitTestListView(const CPoint& pt);
@@ -138,6 +146,8 @@ private:
 	void	_SetNoFullRowSelect();
 	void	_Register_openInTabLocalServer(bool bRegister);
 	void	_RegisterExecuteCommandVerb(bool bRegister);
+	bool	_SubclassAddressBarProgress();
+	bool	_SubclassAddressBarEditCtrl();
 
 	// Data members
 	CDonutTabBar	m_wndTabBar;
@@ -152,6 +162,8 @@ private:
 	CContainedWindow	m_wndListView;
 	CContainedWindow	m_wndDirectUI;
 	CContainedWindow	m_wndExplorer;
+	CContainedWindow	m_wndAddressBarProgress;
+	CContainedWindow	m_wndAddressBarEditCtrl;
 
 	CListViewCtrl		m_ListView;
 	CToolTipCtrl		m_Tooltip;

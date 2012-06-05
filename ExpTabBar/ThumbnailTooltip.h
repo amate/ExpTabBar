@@ -6,6 +6,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <memory>
 #include <atlsync.h>
 
 namespace Gdiplus {

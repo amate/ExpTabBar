@@ -3,7 +3,6 @@
 #include "stdafx.h"
 #include "ExpTabBand.h"
 #include <boost/lexical_cast.hpp>
-#include <boost/thread.hpp>
 #include "ShellWrap.h"
 #include "GdiplusUtil.h"
 
@@ -14,10 +13,11 @@ CExpTabBand::CExpTabBand() :
 	m_wndListView(this, 2),
 	m_wndDirectUI(this, 3),
 	m_wndExplorer(this, 6),
+	m_wndAddressBarProgress(this, 7),
+	m_wndAddressBarEditCtrl(this, 8),
 	m_nIndexTooltip(-1),
 	m_bNowTrackMouseLeave(false),
-	m_bNowTrackMouseHover(false),
-	m_bRegisterServer(false)
+	m_bNowTrackMouseHover(false)
 {
 	GdiplusInit();
 }
@@ -99,8 +99,13 @@ STDMETHODIMP CExpTabBand::ShowDW(BOOL fShow)
     //まだツールバーを作ってないので、何もしない
 	ATLTRACE(_T("ShowDW() : %s\n"), fShow ? _T("true") : _T("false"));
 	if (fShow == FALSE)	// 表示されるときはエクスプローラーにフォーカスが当たってるので登録しなくていい
-		_RegisterExecuteCommandVerb(false);	
-	_Register_openInTabLocalServer(fShow != 0);
+		_RegisterExecuteCommandVerb(false);
+
+	if (fShow && m_wndExplorer.IsWindow() == FALSE && m_wndTabBar.m_hWnd)
+		m_wndExplorer.SubclassWindow(m_wndTabBar.GetTopLevelWindow());
+	else if (fShow == FALSE && m_wndExplorer.IsWindow())
+		m_wndExplorer.UnsubclassWindow();
+
     return S_OK;
 }
 
@@ -140,7 +145,8 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		m_wndExplorer.SubclassWindow(CWindow(hWndParent).GetTopLevelWindow());
 		if (m_wndExplorer == ::GetFocus() || m_wndExplorer.IsChild(::GetFocus()))
 			_RegisterExecuteCommandVerb(false);
-		_Register_openInTabLocalServer(true);
+
+		_SubclassAddressBarProgress();
 		
 		CComQIPtr<IServiceProvider> pSP(punkSite);
 		ATLASSERT(pSP);
@@ -492,13 +498,14 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 			}
 			::ILFree(pidlFolder);
 
-			boost::thread	td([this, vec]() {
+			std::thread	td([this, vec]() {
 				for (auto it = vec.begin(); it != vec.end(); ++it) {
 					if (::GetKeyState(VK_ESCAPE) < 0)
 						break;
 					m_ThumbnailTooltip.AddThumbnailCache(*it);
 				}
 			});
+			td.detach();
 		}
 	} else {
 		//_SetNoFullRowSelect();
@@ -513,6 +520,29 @@ void	CExpTabBand::OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOt
 	_RegisterExecuteCommandVerb(!(nState != WA_INACTIVE));
 }
 
+void	CExpTabBand::OnAddressBarProgressParentNotify(UINT message, UINT nChildID, LPARAM lParam)
+{
+	m_wndAddressBarProgress.DefWindowProc();
+	if (message == WM_CREATE && nChildID == 0xA205) {	// ConboBoxEx32
+		_SubclassAddressBarEditCtrl();
+	}
+}
+
+void	CExpTabBand::OnAddressBarEditKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
+{
+	if (nChar == VK_RETURN && CTabBarConfig::s_bAddressBarNewTabOpen) {
+		CString strPath;
+		m_wndAddressBarEditCtrl.GetWindowText(strPath.GetBuffer(MAX_PATH), MAX_PATH);
+		strPath.ReleaseBuffer();
+		ATLTRACE(_T("OnAddressBarEditKeyDown : %s\n"), (LPCTSTR)strPath);
+		LPITEMIDLIST pidl = ShellWrap::CreateIDListFromFullPath(strPath);
+		if (pidl && ShellWrap::IsExistFolderFromIDList(pidl)) {
+			m_wndTabBar.ExternalOpen(pidl);
+			return ;
+		}
+	}
+	m_wndAddressBarEditCtrl.DefWindowProc();
+}
 
 // private:
 
@@ -744,26 +774,11 @@ void	CExpTabBand::_SetNoFullRowSelect()
 }
 
 
-void	CExpTabBand::_Register_openInTabLocalServer(bool bRegister)
-{
-	OSVERSIONINFO	osvi = { sizeof(osvi) };
-	GetVersionEx(&osvi);
-	if ( !(osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) )	// Win7以外
-		return ;
-	m_bRegisterServer	= bRegister;
-	CString openInTabExePath = Misc::GetExeDirectory() + _T("openInTab.exe");
-	::ShellExecute(NULL, NULL, openInTabExePath, bRegister ? _T("-Register") : _T("-UnRegister"), NULL, FALSE);
-}
-
-
 void	CExpTabBand::_RegisterExecuteCommandVerb(bool bRegister)
 {
 	OSVERSIONINFO	osvi = { sizeof(osvi) };
 	GetVersionEx(&osvi);
 	if ( !(osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) )	// Win7以外
-		return ;
-
-	if (m_bRegisterServer == false)
 		return ;
 
 	CRegKey	rkFolderCommand;
@@ -776,4 +791,57 @@ void	CExpTabBand::_RegisterExecuteCommandVerb(bool bRegister)
 			rkFolderCommand.RecurseDeleteKey(_T("open"));
 	}
 }
+
+bool	CExpTabBand::_SubclassAddressBarProgress()
+{
+	LPCTSTR targetClassLoad[] = {
+		_T("WorkerW"), _T("ReBarWindow32"), _T("Address Band Root"), _T("msctls_progress32"), nullptr
+	};
+
+	std::function<HWND (HWND, int)>	funcFindWindow;
+	funcFindWindow = [&](HWND hWnd, int nIndex) -> HWND {
+		if (targetClassLoad[nIndex] == nullptr)
+			return hWnd;
+		HWND hWndFound = FindWindowEx(hWnd, NULL, targetClassLoad[nIndex], NULL);
+		if (hWndFound) {
+			return funcFindWindow(hWndFound, nIndex + 1);
+		}
+		return NULL;
+	};
+	HWND hWndProgress = funcFindWindow(m_wndExplorer, 0);
+	ATLASSERT( hWndProgress );
+	if (hWndProgress) {
+		m_wndAddressBarProgress.SubclassWindow(hWndProgress);
+		return true;
+	}
+	return false;
+}
+
+bool	CExpTabBand::_SubclassAddressBarEditCtrl()
+{
+	LPCTSTR targetClassLoad[] = {
+		_T("ComboBoxEx32"), _T("ComboBox"), _T("Edit"), nullptr
+	};
+	std::function<HWND (HWND, int)>	funcFindWindow;
+	funcFindWindow = [&](HWND hWnd, int nIndex) -> HWND {
+		if (targetClassLoad[nIndex] == nullptr)
+			return hWnd;
+		HWND hWndFound = FindWindowEx(hWnd, NULL, targetClassLoad[nIndex], NULL);
+		if (hWndFound) {
+			return funcFindWindow(hWndFound, nIndex + 1);
+		}
+		return NULL;
+	};
+	HWND hWndEdit = funcFindWindow(m_wndAddressBarProgress, 0);
+	ATLASSERT( hWndEdit );
+	if (hWndEdit) {
+		m_wndAddressBarEditCtrl.SubclassWindow(hWndEdit);
+		return true;
+	}
+	return false;
+}
+
+
+
+
 

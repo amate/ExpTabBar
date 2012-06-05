@@ -48,7 +48,6 @@ PIDLIST_ABSOLUTE CreateIDListFromFullPath(LPCTSTR strFullPath)
 	if (::SHILCreateFromPath(strFullPath, &pidl, NULL) == S_OK) {
 		return pidl;
 	}
-	ATLASSERT(FALSE);
 	return NULL;
 }
 

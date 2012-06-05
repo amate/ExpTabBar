@@ -64,7 +64,7 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 				delete m_mapImageCache.begin()->second;
 				m_mapImageCache.erase(m_mapImageCache.begin());
 			}
-			auto it = m_mapImageCache.insert(std::make_pair<std::wstring, ImageData*>(path, pdata.release()));
+			auto it = m_mapImageCache.insert(std::make_pair(path, static_cast<ImageData*>(pdata.release())));
 			m_pNowImageData = it.first->second;
 		}
 	}

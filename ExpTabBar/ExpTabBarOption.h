@@ -54,6 +54,7 @@ public:
 	static int		s_nMaxHistoryCount;
 	static bool		s_bMargeControlPanel;
 	static bool		s_bNoFullRowSelect;
+	static bool		s_bAddressBarNewTabOpen;
 	
 	static void	LoadConfig();
 	static void	SaveConfig();

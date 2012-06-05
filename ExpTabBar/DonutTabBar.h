@@ -4,7 +4,7 @@
 #include "OleDragDropTabCtrl.h"
 #include "HlinkDataObject.h"
 
-//#define	WM_NEWTABBUTTON	(WM_APP + 1)
+#define	WM_ISMARGECONTROLPANEL	(WM_APP + 1)
 
 
 // Forward Declare
@@ -23,10 +23,12 @@ public:
 
 	BEGIN_MSG_MAP_EX( CNotifyWindow )
 		MSG_WM_COPYDATA( OnCopyData )
+		MESSAGE_HANDLER_EX(WM_ISMARGECONTROLPANEL, OnIsMargeControlPanel)
 		//CHAIN_MSG_MAP( CFrameWindowImpl<CNotifyWindow> )
 	END_MSG_MAP()
 
 	BOOL OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct);
+	LRESULT OnIsMargeControlPanel(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 private:
 	CDonutTabBar*	m_pTabBar;
