@@ -324,7 +324,8 @@ void	CExpTabBand::OnListViewMouseMove(UINT nFlags, CPoint point)
 		CRect rcItem;
 		int nIndex = bListView ? _HitTestListView() : _HitTestDirectUI(rcItem);
 		if (nIndex == -1) {
-			_HideThumbnailTooltip();
+			m_wndTabBar.SetTimer(kHideThumbnailTooltipTimerID, kHideThumbnailTooltipTimerInterval);
+			//_HideThumbnailTooltip();
 			return ;
 		}
 
@@ -509,6 +510,24 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 		}
 	} else {
 		//_SetNoFullRowSelect();
+	}
+}
+
+
+void	CExpTabBand::OnTabBarTimer(UINT_PTR nIDEvent)
+{
+	if (nIDEvent == kHideThumbnailTooltipTimerID) {
+		bool bListView = m_ListView.m_hWnd != NULL;
+		if (m_ThumbnailTooltip.IsWindowVisible()) {
+			CRect rcItem;
+			int nIndex = bListView ? _HitTestListView() : _HitTestDirectUI(rcItem);
+			if (nIndex == -1) {
+				_HideThumbnailTooltip();
+			}
+		}
+		m_wndTabBar.KillTimer(kHideThumbnailTooltipTimerID);
+	} else {
+		SetMsgHandled(FALSE);
 	}
 }
 

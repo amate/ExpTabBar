@@ -132,6 +132,8 @@ protected:
 
 	const CRect	_InflateGapWidth(const CRect &rc) const;
 
+	void	_RefreshItemStrDraw();
+
 protected:
 
 	enum _TabCtrlDrawConstants

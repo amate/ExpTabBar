@@ -22,6 +22,10 @@ enum {
 	kTooltipTopItemMargin = 4,
 };
 
+
+//////////////////////////////////////////////////////////////////////
+// CThumbnailTooltip
+
 CThumbnailTooltip::CThumbnailTooltip()
 	: m_pNowImageData(nullptr), m_nFramePosition(0), m_TimerID(0), m_bAddImageCached(false)
 {
@@ -70,15 +74,41 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 	}
 	if (m_pNowImageData) {
 		CRect rcTooltip = _CalcTooltipRect(rcItem, *m_pNowImageData);
-		MoveWindow(&rcTooltip);
+		SetLayeredWindowAttributes(m_hWnd, 0, 0, LWA_ALPHA);
+		MoveWindow(&rcTooltip, FALSE);
 
 		if (m_pNowImageData->bGifAnimation) {
 			m_TimerID = SetTimer(1, m_pNowImageData->vecDelayTime[0]);
 		}
 
-		Invalidate(FALSE);
+		/// windows7のツールチップのように丸みをつける
+		SetWindowRgn(CreateRoundRectRgn(0, 0, rcTooltip.Width(), rcTooltip.Height(), 3, 3));
+
 		SetWindowPos(HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOCOPYBITS);
 		ShowWindow(SW_SHOWNOACTIVATE);
+		Invalidate(FALSE);
+		UpdateWindow();
+		SetLayeredWindowAttributes(m_hWnd, 0, 255, LWA_ALPHA);
+		return true;
+#if 0
+		//ShowWindow(FALSE);
+		//MoveWindow(&rcTooltip, FALSE);
+		//Invalidate(FALSE);
+		//UpdateWindow();
+		//SetRedraw(FALSE);
+		if (m_pNowImageData->bGifAnimation) {
+			m_TimerID = SetTimer(1, m_pNowImageData->vecDelayTime[0]);
+		}
+		Invalidate(FALSE);
+		UpdateWindow();
+
+		//SetWindowPos(HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+		SetWindowPos(HWND_TOPMOST, &rcTooltip, SWP_NOACTIVATE | /*SWP_NOREDRAW | */SWP_NOCOPYBITS);
+		ShowWindow(SW_SHOWNA);
+
+
+		//SetRedraw(TRUE);
+#endif
 		return true;
 	}
 	return false;
@@ -86,7 +116,7 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 
 void	CThumbnailTooltip::HideThumbnailTooltip()
 {
-	if (IsWindowVisible() == false)
+	if ( IsWindowVisible() == false )
 		return ;
 
 	ShowWindow(FALSE);
@@ -98,6 +128,7 @@ void	CThumbnailTooltip::HideThumbnailTooltip()
 
 	m_pNowImageData = nullptr;
 }
+
 
 void	CThumbnailTooltip::AddThumbnailCache(LPCTSTR strPath)
 {
@@ -120,7 +151,7 @@ void	CThumbnailTooltip::OnLocationChanged()
 }
 
 
-void CThumbnailTooltip::DoPaint(CDCHandle dc)
+void CThumbnailTooltip::DoPaint(CDCHandle dc, RECT& /*rect*/)
 {
 	if (m_pNowImageData == nullptr)
 		return ;
@@ -167,7 +198,7 @@ int CThumbnailTooltip::OnCreate(LPCREATESTRUCT lpCreateStruct)
 /// windows7のツールチップのように丸みをつける
 void CThumbnailTooltip::OnSize(UINT nType, CSize size)
 {
-	SetWindowRgn(CreateRoundRectRgn( 0, 0, size.cx, size.cy, 3, 3 ), true);
+	
 }
 
 void CThumbnailTooltip::OnTimer(UINT_PTR nIDEvent)
@@ -189,14 +220,14 @@ CRect	CThumbnailTooltip::_CalcTooltipRect(const CRect& rcItem, const ImageData& 
 	MONITORINFO moniInfo = { sizeof(MONITORINFO) };
 	GetMonitorInfo(hMoni, &moniInfo);
 
-	int nToolTipWidth  = ImageData.ActualSize.cx + kBoundMargin*2 + 1;
-	int nToolTipHeight = ImageData.ActualSize.cy + kBoundMargin*2 + 1 + kImageTextMargin + ImageData.nInfoTipHeight;
+	int nToolTipWidth  = std::max(ImageData.ActualSize.cx, ImageData.InfoTipTextSize.cx) + kBoundMargin*2 + 1;
+	int nToolTipHeight = ImageData.ActualSize.cy + kBoundMargin*2 + 1 + kImageTextMargin + ImageData.InfoTipTextSize.cy;
 	CRect rcTooltip(rcItem.BottomRight(), CSize(nToolTipWidth, nToolTipHeight));
 
 	CRect rcWork = moniInfo.rcWork;
-	// モニターの右端をはみ出てる
+	// モニターの右端と下端をはみ出てる
 	if (rcWork.right < rcTooltip.right && rcWork.bottom < rcTooltip.bottom) {
-		rcTooltip.MoveToXY(rcItem.right - nToolTipWidth, rcItem.top - nToolTipHeight - kTooltipTopItemMargin);
+		rcTooltip.MoveToXY(rcItem.left - nToolTipWidth, rcWork.bottom - nToolTipHeight);
 
 	} else {
 		if (rcWork.right < rcTooltip.right) {	// モニター右をはみ出る
@@ -237,7 +268,7 @@ CSize	CThumbnailTooltip::_CalcActualSize(Gdiplus::Image* image)
 }
 
 
-int		CThumbnailTooltip::_CalcInfoTipTextHeight(const ImageData& ImageData)
+CSize		CThumbnailTooltip::_CalcInfoTipTextSize(const ImageData& ImageData)
 {
 	CDC dc = GetDC();
 	if (IsThemeNull() == false) {
@@ -246,13 +277,13 @@ int		CThumbnailTooltip::_CalcInfoTipTextHeight(const ImageData& ImageData)
 			ImageData.strInfoTipText, 
 			ImageData.strInfoTipText.GetLength(), 
 			DT_END_ELLIPSIS, NULL, &rcText);
-		return rcText.Height();
+		return rcText.Size();
 	} else {
 		HFONT hFontPrev = dc.SelectFont(m_NoThemeFont);
 		CSize	size;
 		dc.GetTextExtent(ImageData.strInfoTipText, ImageData.strInfoTipText.GetLength(), &size);
 		dc.SelectFont(hFontPrev);
-		return size.cy;
+		return size;
 	}
 	
 }
@@ -306,7 +337,7 @@ std::unique_ptr<CThumbnailTooltip::ImageData>	CThumbnailTooltip::_CreateImageDat
 
 		//imgdata.thumbnail = bmpRaw->GetThumbnailImage(imgdata.ActualSize.cx, imgdata.ActualSize.cy);
 		imgdata.strInfoTipText = ShellWrap::GetInfoTipText(strPath);
-		imgdata.nInfoTipHeight = _CalcInfoTipTextHeight(imgdata);
+		imgdata.InfoTipTextSize = _CalcInfoTipTextSize(imgdata);
 	}
 	return pdata;
 }

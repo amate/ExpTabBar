@@ -340,7 +340,12 @@ void	CTabCtrlImpl::_UpdateMultiLineLayout(int nWidth)
 		if (cxOffset == 0) 
 			cxOffset = s_kSideMargin;
 
-		if (CTabBarConfig::s_bUseFixedSize) {
+		enum { kcxIcon = 16, s_kcxIconGap = 5, kMuitlDrawPadding = 10 };
+		if (item.m_strDrawPath.GetLength() > 0) {
+			CRect rcItem(0, 0, MtlComputeWidthOfText(item.m_strDrawPath, m_pTabSkin->GetFontHandle()), CTabBarConfig::s_FixedSize.cy);
+			rcItem.right += kcxIcon + s_kcxIconGap + kMuitlDrawPadding;
+			item.m_rcItem = rcItem + CPoint(cxOffset, cyOffset);
+		} else if (CTabBarConfig::s_bUseFixedSize) {
 			item.m_rcItem = CRect(CPoint(cxOffset, cyOffset), CTabBarConfig::s_FixedSize);
 		} else {
 			item.m_rcItem = _MeasureItemRect(m_items[i].m_strItem) + CPoint(cxOffset, cyOffset);
@@ -351,7 +356,11 @@ void	CTabCtrlImpl::_UpdateMultiLineLayout(int nWidth)
 			cxOffset = s_kSideMargin;
 			cyOffset += GetItemHeight() + s_kcyGap;	// s_kcyGap分下に移動
 
-			if (CTabBarConfig::s_bUseFixedSize) {
+			if (item.m_strDrawPath.GetLength() > 0) {
+				CRect rcItem(0, 0, MtlComputeWidthOfText(item.m_strDrawPath, m_pTabSkin->GetFontHandle()), CTabBarConfig::s_FixedSize.cy);
+				rcItem.right += kcxIcon + s_kcxIconGap + kMuitlDrawPadding;
+				item.m_rcItem = rcItem + CPoint(cxOffset, cyOffset);
+			} else if (CTabBarConfig::s_bUseFixedSize) {
 				item.m_rcItem = CRect(CPoint(cxOffset, cyOffset), CTabBarConfig::s_FixedSize);
 			} else {
 				item.m_rcItem = _MeasureItemRect(m_items[i].m_strItem) + CPoint(cxOffset, cyOffset);
@@ -665,8 +674,6 @@ int		CTabCtrlImpl::HitTest(const CPoint& point)
 	return -1;
 }
 
-
-
 int		CTabCtrlImpl::InsertItem(int nIndex, const CTabItem &item)
 {
 	TCTRACE( _T("InsertItem : %2d\n"), nIndex );
@@ -680,6 +687,26 @@ int		CTabCtrlImpl::InsertItem(int nIndex, const CTabItem &item)
 	} else {
 		m_items.insert(m_items.begin() + nIndex, item);
 		m_nActiveIndex = -1;
+	}
+	bool bMulti = false;
+	int nCount = static_cast<int>(m_items.size());
+	for (int i = 0; i < nCount; ++i) {
+		if (i == nIndex)
+			continue;
+		if (m_items[i].m_strItem.CompareNoCase(item.m_strItem) == 0) {
+			auto funcGetLastPath = [this](const CString& path) -> CString {
+				int nSlashPos = path.ReverseFind(L'\\');
+				if (nSlashPos != -1)
+					return path.Left(nSlashPos);
+				return path;
+			};
+			m_items[i].m_strDrawPath.Format(_T("%s | %s"), m_items[i].m_strItem, funcGetLastPath(m_items[i].m_strFullPath));
+
+			if (bMulti == false) {
+				m_items[nIndex].m_strDrawPath.Format(_T("%s | %s"),  m_items[nIndex].m_strItem, funcGetLastPath(m_items[nIndex].m_strFullPath));
+				bMulti = true;
+			}
+		}
 	}
 
 	_UpdateLayout();
@@ -733,6 +760,22 @@ void	CTabCtrlImpl::DeleteItem(int nIndex, bool bMoveNow)
 			delete GetItem(nIndex).m_pTravelLogBack;
 		if (GetItem(nIndex).m_pTravelLogFore)
 			delete GetItem(nIndex).m_pTravelLogFore;
+
+		int multiCount = 0;
+		int nLastMultiIndex = -1;
+		int nCount = static_cast<int>(m_items.size());
+		for (int i = 0; i < nCount; ++i) {
+			if (i == nIndex)
+				continue;
+			if (m_items[i].m_strItem.CompareNoCase(m_items[nIndex].m_strItem) == 0) {
+				++multiCount;
+				nLastMultiIndex = i;
+			}
+		}
+		// 2つある名前被りのうち一つがなくなったのでもう一つも"名前だけ"にする
+		if (multiCount == 1) {
+			m_items[nLastMultiIndex].m_strDrawPath.Empty();
+		}
 	}
 
 	m_items.erase(m_items.begin() + nIndex);
@@ -873,10 +916,49 @@ void	CTabCtrlImpl::SetItemText(int nIndex, LPCTSTR strText)
 	if (m_items[nIndex].m_strItem == strTab)
 		return ;
 
+	int multiCount = 0;
+	int nLastMultiIndex = -1;
+	int nCount = static_cast<int>(m_items.size());
+	for (int i = 0; i < nCount; ++i) {
+		if (i == nIndex)
+			continue;
+		if (m_items[i].m_strItem.CompareNoCase(m_items[nIndex].m_strItem) == 0) {
+			++multiCount;
+			nLastMultiIndex = i;
+		}
+	}
+	// 2つある名前被りのうち一つがなくなったのでもう一つも"名前だけ"にする
+	if (multiCount == 1) {
+		m_items[nIndex].m_strDrawPath.Empty();
+		m_items[nLastMultiIndex].m_strDrawPath.Empty();
+	}
+
 	m_items[nIndex].m_strItem = strTab;
+
+	bool bMulti = false;
+	nCount = static_cast<int>(m_items.size());
+	for (int i = 0; i < nCount; ++i) {
+		if (i == nIndex)
+			continue;
+		if (m_items[i].m_strItem.CompareNoCase(m_items[nIndex].m_strItem) == 0) {
+			auto funcGetLastPath = [this](const CString& path) -> CString {
+				int nSlashPos = path.ReverseFind(L'\\');
+				if (nSlashPos != -1)
+					return path.Left(nSlashPos);
+				return path;
+			};
+			m_items[i].m_strDrawPath.Format(_T("%s | %s"), m_items[i].m_strItem, funcGetLastPath(m_items[i].m_strFullPath));
+
+			if (bMulti == false) {
+				m_items[nIndex].m_strDrawPath.Format(_T("%s | %s"),  m_items[nIndex].m_strItem, funcGetLastPath(m_items[nIndex].m_strFullPath));
+				bMulti = true;
+			}
+		}
+	}
 
 	if (CTabBarConfig::s_bUseFixedSize) {
 		InvalidateRect(m_items[nIndex].m_rcItem);
+		_UpdateLayout();			
 		UpdateWindow();
 	} else {
 		InvalidateRect(m_items[nIndex].m_rcItem);	// even if layout will not be changed

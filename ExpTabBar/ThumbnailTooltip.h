@@ -13,23 +13,24 @@ namespace Gdiplus {
 	class Image;
 };
 
+
 class CThumbnailTooltip : 
-	public CDoubleBufferWindowImpl<CThumbnailTooltip>,
+	public CBufferedPaintWindowImpl<CThumbnailTooltip>,
 	public CThemeImpl<CThumbnailTooltip>
 {
 public:
-	DECLARE_WND_CLASS_EX(NULL, CS_HREDRAW | CS_VREDRAW | CS_DROPSHADOW, 0);
+	DECLARE_WND_CLASS_EX(NULL, /*CS_HREDRAW | CS_VREDRAW |*/ CS_DROPSHADOW, 0);
 
 	struct ImageData {
 		Gdiplus::Image*	thumbnail;
 		CSize	ActualSize;
 		CString strInfoTipText;
-		int		nInfoTipHeight;
+		CSize	InfoTipTextSize;
 		bool	bGifAnimation;
 		std::vector<Gdiplus::Image*>	vecGifImage;
 		std::vector<int>				vecDelayTime;
 		UINT	nFrameCount;
-		ImageData() : thumbnail(nullptr), nInfoTipHeight(0), bGifAnimation(false), nFrameCount(0) { }
+		ImageData() : thumbnail(nullptr), bGifAnimation(false), nFrameCount(0) { }
 	};
 
 	CThumbnailTooltip();
@@ -42,10 +43,10 @@ public:
 	void	OnLocationChanged();
 
 	// Overrides
-	void DoPaint(CDCHandle dc);
+	void DoPaint(CDCHandle dc, RECT& /*rect*/);
 
 	BEGIN_MSG_MAP( CThumbnailTooltip )
-		CHAIN_MSG_MAP( CDoubleBufferWindowImpl<CThumbnailTooltip> )
+		CHAIN_MSG_MAP(CBufferedPaintWindowImpl<CThumbnailTooltip>)
 		CHAIN_MSG_MAP( CThemeImpl<CThumbnailTooltip> )
 		MSG_WM_CREATE( OnCreate )
 		MSG_WM_SIZE	( OnSize )
@@ -59,7 +60,7 @@ public:
 private:
 	CRect	_CalcTooltipRect(const CRect& rcItem, const ImageData& ImageData);
 	CSize	_CalcActualSize(Gdiplus::Image* image);
-	int		_CalcInfoTipTextHeight(const ImageData& ImageData);
+	CSize	_CalcInfoTipTextSize(const ImageData& ImageData);
 	std::unique_ptr<ImageData>	_CreateImageData(LPCTSTR strPath);
 	void	_ClearImageCache();
 

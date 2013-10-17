@@ -83,6 +83,7 @@ ALT_MSG_MAP(3)	// DirectUI
 	}
 ALT_MSG_MAP(5)
 	MSG_WM_LBUTTONDBLCLK( OnTabBarLButtonDblClk	)
+	MSG_WM_TIMER		( OnTabBarTimer	)
 ALT_MSG_MAP(6)
 	MSG_WM_ACTIVATE( OnExplorerActivate	)
 ALT_MSG_MAP(7)	// addressbar progress
@@ -127,6 +128,7 @@ public:
 	void	OnParentNotify(UINT message, UINT nChildID, LPARAM lParam);
 
 	void	OnTabBarLButtonDblClk(UINT nFlags, CPoint point);
+	void	OnTabBarTimer(UINT_PTR nIDEvent);
 
 	void	OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOther);
 
@@ -148,6 +150,12 @@ private:
 	void	_RegisterExecuteCommandVerb(bool bRegister);
 	bool	_SubclassAddressBarProgress();
 	bool	_SubclassAddressBarEditCtrl();
+
+	// Constants
+	enum { 
+		kHideThumbnailTooltipTimerID = 20, 
+		kHideThumbnailTooltipTimerInterval = 300,
+	};
 
 	// Data members
 	CDonutTabBar	m_wndTabBar;

@@ -98,6 +98,7 @@ protected:
 		htOneselfLeft,	// 自分のタブの左
 		htOneselfRight,	// 自分のタブの右
 	};
+	enum { kInset = 10 };
 
 	// Dragしているタブとその左右にカーソルがあるか
 	int _HitTestCurTabSide(CPoint point, _hitTestFlag &flag)
@@ -136,7 +137,7 @@ protected:
 	}
 
 	// どのタブの間にカーソルがあるかどうか
-	int _HitTestSeparator(CPoint point, vector<std::pair<int, CRect> >& vecRect/*, int nInset*/)
+	int _HitTestSeparator(CPoint point, vector<std::pair<int, CRect> >& vecRect, bool bInset = false)
 	{
 		DDTCTRACE( _T("COleDragDropTabCtrl::_HitTestSeparator\n") );
 
@@ -161,8 +162,11 @@ protected:
 						 rcItem.right,
 						 rcItem.top	  + cyGap);
 
-			//	rcSep.InflateRect(nInset, 0);
-			rcSep.InflateRect(rcItem.Width() / 2, 0);
+			if (bInset) {
+				rcSep.InflateRect(kInset, 0);
+			} else {
+				rcSep.InflateRect(rcItem.Width() / 2, 0);
+			}
 
 			if (rcSep.PtInRect(point)) {
 				DDTCTRACE( _T(" アイテムの間にあります！(%d)\n"), i );
@@ -175,10 +179,12 @@ protected:
 	}
 
 	// タブバーの左側上にカーソルがあるかどうか
-	int _HitTestLeftSide(CPoint point, vector<std::pair<int, CRect> >& vecRect)
+	int _HitTestLeftSide(CPoint point, vector<std::pair<int, CRect> >& vecRect, bool bInset = false)
 	{
 		for (int i = 0; i < vecRect.size(); ++i) {
-			vecRect[i].second.left = 0;
+			if (bInset)
+				vecRect[i].second.right = vecRect[i].second.left + kInset;
+			vecRect[i].second.left = 0;			
 			if (vecRect[i].second.PtInRect(point)) {
 				return vecRect[i].first;
 			}
@@ -236,7 +242,7 @@ protected:
 		return -1;
 	}
 
-	int HitTestOnDragging(_hitTestFlag &flag, CPoint point)
+	int HitTestOnDragging(_hitTestFlag &flag, CPoint point, bool bInset = false)
 	{
 		int nIndex;
 
@@ -252,14 +258,14 @@ protected:
 		vector<std::pair<int, CRect> > vecRect;
 
 		// タブの境界上にカーソルがあるかどうか
-		if (( nIndex = _HitTestSeparator(point, vecRect/*, s_nScrollInset*/) ) != -1) {
+		if (( nIndex = _HitTestSeparator(point, vecRect, bInset) ) != -1) {
 			// タブの境界にHitした
 			flag = htSeparator;
 			return nIndex;
 		}
 
 		// 左側にカーソルがあるかどうか
-		if (( nIndex = _HitTestLeftSide(point, vecRect) ) != -1) {
+		if (( nIndex = _HitTestLeftSide(point, vecRect, bInset) ) != -1) {
 			flag = htInsetLeft;
 			return nIndex;
 		}

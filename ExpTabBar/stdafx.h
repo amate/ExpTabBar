@@ -71,6 +71,10 @@ using namespace std::placeholders;
 #include <xmllite.h>
 #pragma comment(lib, "xmllite.lib")
 
+#undef min
+using std::min;
+#undef max
+using std::max;
 
 extern HINSTANCE		g_hInst;
 

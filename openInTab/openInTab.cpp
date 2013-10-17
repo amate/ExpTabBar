@@ -105,8 +105,8 @@ public:
         return S_OK;
     }
 
-    IFACEMETHODIMP SetParameters(PCWSTR /* pszParameters */)
-    { return S_OK; }
+    IFACEMETHODIMP SetParameters(PCWSTR /*pszParameters*/)
+	{ return S_OK; }
 
     IFACEMETHODIMP SetPosition(POINT pt)
     {
@@ -123,7 +123,7 @@ public:
     IFACEMETHODIMP SetNoShowUI(BOOL /* fNoShowUI */)
     { return S_OK; }
 
-    IFACEMETHODIMP SetDirectory(PCWSTR /* pszDirectory */)
+    IFACEMETHODIMP SetDirectory(PCWSTR /*pszDirectory*/)
     { return S_OK; }
 
     IFACEMETHODIMP Execute();
@@ -142,8 +142,8 @@ public:
     }
 
     // IInitializeCommand
-    IFACEMETHODIMP Initialize(PCWSTR /* pszCommandName */, IPropertyBag * /* ppb */)
-    {
+    IFACEMETHODIMP Initialize(PCWSTR /*pszCommandName*/, IPropertyBag * /* ppb */)
+	{
         // The verb name is in pszCommandName, this handler can varry its behavior
         // based on the command name (implementing different verbs) or the
         // data stored under that verb in the registry can be read via ppb
@@ -163,10 +163,29 @@ public:
         return _punkSite ? _punkSite->QueryInterface(riid, ppv) : E_FAIL;
     }
 
+	void RunExplorer(LPCTSTR strPath)
+	{
+		LPWSTR strWinFolder = nullptr;
+		HRESULT hr = SHGetKnownFolderPath(FOLDERID_Windows, 0, NULL, &strWinFolder);
+		if (SUCCEEDED(hr)) {
+			WCHAR strExplorerPath[MAX_PATH];
+			StringCchPrintf(strExplorerPath, MAX_PATH, L"%s\\explorer.exe", strWinFolder);
+			::CoTaskMemFree(strWinFolder);
+			::ShellExecute(NULL, NULL, strExplorerPath, strPath, NULL, SW_NORMAL);
+		}
+	}
+
 	/// ExpTabBarに開かれるフォルダの情報を送る
     void OnAppCallback()
     {
 		//assert(FALSE);
+		if (_psia == nullptr) {		
+			// タスクバーの時計の右クリックメニューのプロパティをクリックしたときに
+			// 自前で"通知領域アイコン\\システム アイコン"を開かせる
+			RunExplorer(L"コントロール パネル\\すべてのコントロール パネル項目\\通知領域アイコン\\システム アイコン");
+			return ;
+		}
+
 		HWND hWndNotify = ::FindWindow(EXPTABBAR_NOTIFYWINDOWCLASSNAME, NULL);
 		DWORD count = 0;
 		_psia->GetCount(&count);
@@ -179,16 +198,7 @@ public:
 				if (SUCCEEDED(hr) && pidl) {
 					LPWSTR strPath = nullptr;
 					hr = psi->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, &strPath);
-					auto funcRunExplorer = [&] () {
-						LPWSTR strWinFolder = nullptr;
-						hr = SHGetKnownFolderPath(FOLDERID_Windows, 0, NULL, &strWinFolder);
-						if (SUCCEEDED(hr)) {
-							WCHAR strExplorerPath[MAX_PATH];
-							StringCchPrintf(strExplorerPath, MAX_PATH, L"%s\\explorer.exe", strWinFolder);
-							::CoTaskMemFree(strWinFolder);
-							::ShellExecute(NULL, NULL, strExplorerPath, strPath, NULL, SW_NORMAL);
-						}
-					};
+
 					if (hWndNotify) {
 						if (::SendMessage(hWndNotify, WM_ISMARGECONTROLPANEL, 0, 0) != 0 ||		// コントローラーパネルを取り込む
 							wcsncmp(strPath, L"::{26EE0668-A00A-44D7-9371-BEB064C98683}", 40) != 0 ) {
@@ -199,13 +209,13 @@ public:
 							SendMessage(hWndNotify, WM_COPYDATA, NULL, (LPARAM)&cd);	
 							
 						} else {
-							funcRunExplorer();
+							RunExplorer(strPath);
 						}
 
 					} else {	// ExpTabBarが見つからない
 						UnRegisterExecuteCommandVerb();
 
-						funcRunExplorer();
+						RunExplorer(strPath);
 					}
 					::CoTaskMemFree(strPath);
 					::CoTaskMemFree(pidl);

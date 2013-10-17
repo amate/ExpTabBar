@@ -5,6 +5,7 @@
 #include <atlenc.h>
 #include <UIAutomation.h>
 #include <thread>
+#include <boost/tokenizer.hpp>
 #include "ShellWrap.h"
 #include "resource.h"
 #include "DonutFunc.h"
@@ -1028,6 +1029,25 @@ int		CDonutTabBar::OnTabCreate(LPITEMIDLIST pidl, bool bAddLast /*= false*/, boo
 
 	item.m_strFullPath = GetFullPathFromIDList(pidl);
 
+	bool bMulti = false;
+	int nCount = static_cast<int>(m_items.size());
+	for (int i = 0; i < nCount; ++i) {
+		if (m_items[i].m_strItem.CompareNoCase(item.m_strItem) == 0) {
+			auto funcGetLastPath = [this](const CString& path) -> CString {
+				int nSlashPos = path.ReverseFind(L'\\');
+				if (nSlashPos != -1)
+					return path.Left(nSlashPos);
+				return path;
+			};
+			m_items[i].m_strDrawPath.Format(_T("%s | %s"), m_items[i].m_strItem, funcGetLastPath(m_items[i].m_strFullPath));
+
+			if (bMulti == false) {
+				item.m_strDrawPath.Format(_T("%s | %s"),  item.m_strItem, funcGetLastPath(item.m_strFullPath));
+				bMulti = true;
+			}
+		}
+	}
+
 	item.m_pTravelLogBack = new TRAVELLOG;
 	item.m_pTravelLogFore = new TRAVELLOG;
 
@@ -1315,7 +1335,16 @@ DROPEFFECT CDonutTabBar::OnDragOver(IDataObject *pDataObject, DWORD dwKeyState, 
 			return DROPEFFECT_NONE;
 		}
 		
-		int nIndex = HitTest(point);
+		_hitTestFlag flag;
+		int nIndex = HitTestOnDragging(flag, point, true);
+		// フォルダーをタブ境界へ
+		if (m_bDragItemIncludeFolder && (flag == _hitTestFlag::htSeparator || flag == _hitTestFlag::htInsetLeft)) {
+			_DrawInsertionEdge(flag, nIndex);
+			SetDropDescription(pDataObject, DROPIMAGE_LABEL, _T("ここにタブを作成"));
+			return DROPEFFECT_LINK;
+		}
+
+		nIndex = HitTest(point);
 		if (nIndex == -1) {		// フォルダがタブ外にドラッグされている
 			_ClearInsertionEdge();
 			if (m_bDragItemIncludeFolder) {	
@@ -1375,9 +1404,16 @@ DROPEFFECT CDonutTabBar::OnDragOver(IDataObject *pDataObject, DWORD dwKeyState, 
 DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect, DROPEFFECT dropEffectList, CPoint point)
 {
 	if (m_bDragFromItself == false) {	// 外部からドロップされた
+
+		_hitTestFlag flag;
+		int nInsertFolder = HitTestOnDragging(flag, point, true);
+		// フォルダーをタブ境界へ
+		if (!(m_bDragItemIncludeFolder && (flag == _hitTestFlag::htSeparator || flag == _hitTestFlag::htInsetLeft)))
+			nInsertFolder = -1;
+
 		HRESULT	hr;
 		int nIndex = HitTest(point);
-		if (nIndex == -1) {	// タブ外
+		if (nIndex == -1 || nInsertFolder != -1) {	// タブ外
 			HRESULT	hr;
 			FORMATETC	fmt;
 			fmt.cfFormat= RegisterClipboardFormat(CFSTR_SHELLIDLIST);
@@ -1397,17 +1433,29 @@ DROPEFFECT CDonutTabBar::OnDrop(IDataObject *pDataObject, DROPEFFECT dropEffect,
 					CComPtr<IShellItem>	spShellItem;
 					hr = ::SHCreateItemFromIDList(pidl, IID_IShellItem, (LPVOID*)&spShellItem);
 					if (hr == S_OK) {
+						auto funcTabCreate = [&, this](LPITEMIDLIST pidl) {
+							if (nInsertFolder != -1) {
+								m_nInsertIndex = nInsertFolder;
+								if (flag == _hitTestFlag::htSeparator)
+									++m_nInsertIndex;
+								OnTabCreate(pidl, false, true);
+								m_nInsertIndex = -1;
+								++nInsertFolder;
+							} else {
+								OnTabCreate(pidl, true);
+							}
+						};
 						SFGAOF	attribute;
 						spShellItem->GetAttributes(SFGAO_FOLDER | SFGAO_LINK, &attribute);
 						if (attribute & SFGAO_LINK) {	// lnkなら解決する
 							LPITEMIDLIST	pidlLink = ShellWrap::GetResolveIDList(pidl);
 							if (pidlLink) {
-								OnTabCreate(pidlLink, true);
+								funcTabCreate(pidlLink);
 							} else if (attribute & SFGAO_FOLDER) {
-								OnTabCreate(pidl, true);
+								funcTabCreate(pidl);
 							}
 						} else if (attribute & SFGAO_FOLDER) {
-							OnTabCreate(pidl, true);
+							funcTabCreate(pidl);
 						}
 					} else {
 						::CoTaskMemFree(pidl);
@@ -1898,6 +1946,8 @@ void	CDonutTabBar::OnTimer(UINT_PTR nIDEvent)
 {
 	if (nIDEvent == AutoSaveTimerID) {
 		SaveAllTab();
+	} else {
+		SetMsgHandled(FALSE);
 	}
 }
 
@@ -2104,16 +2154,23 @@ void	CDonutTabBar::_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObjec
 	::CoInitialize(NULL);
 
 	auto vecIDList = ShellWrap::GetIDListFromDataObject(pDataObject);
+	bool bIsLink = false;
+	if (vecIDList.size() == 1) {
+		CString fullPath = ShellWrap::GetFullPathFromIDList(vecIDList[0]);
+		if (fullPath.Left(2) == _T("::") || (fullPath.GetLength() == 3 && fullPath.Mid(1, 2) == _T(":\\")))
+			bIsLink = true;
+	}
+
 	// リンクを作成する
-	if (  (::GetKeyState(VK_SHIFT) < 0 && ::GetKeyState(VK_CONTROL) < 0)
-		|| vecIDList.size() == 1 && ShellWrap::GetFullPathFromIDList(vecIDList[0]).Left(2) == _T("::"))
-	{
+	if ( (::GetKeyState(VK_SHIFT) < 0 && ::GetKeyState(VK_CONTROL) < 0) || bIsLink ) {
 		CString strTargetFolder = ShellWrap::GetFullPathFromIDList(pidlTo);
 		for (auto it = vecIDList.begin(); it != vecIDList.end(); ++it) {
 			LPITEMIDLIST pidl = *it;
 			CString strLinkName = ShellWrap::GetNameFromIDList(pidl);
-			strLinkName.Replace(L':', L'');
-			ShellWrap::CreateLinkFile(pidl, strTargetFolder + _T("\\") + strLinkName + _T(".lnk"));
+			strLinkName.Replace(L':', L'：');
+			CString strLinkPath;
+			strLinkPath.Format(_T("%s\\%s.lnk"), strTargetFolder, strLinkName);
+			ShellWrap::CreateLinkFile(pidl, strLinkPath);
 			::ILFree(pidl);
 		}
 	} else {

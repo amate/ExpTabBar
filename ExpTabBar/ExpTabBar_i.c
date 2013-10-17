@@ -5,11 +5,11 @@
 /* link this file in with the server and any clients */
 
 
- /* File created by MIDL compiler version 8.00.0594 */
-/* at Tue Jun 05 11:47:43 2012
+ /* File created by MIDL compiler version 8.00.0603 */
+/* at Fri Oct 18 01:37:16 2013
  */
 /* Compiler settings for ExpTabBar.idl:
-    Oicf, W1, Zp8, env=Win32 (32b run), target_arch=X86 8.00.0594 
+    Oicf, W1, Zp8, env=Win64 (32b run), target_arch=AMD64 8.00.0603 
     protocol : dce , ms_ext, c_ext, robust
     error checks: allocation ref bounds_check enum stub_data 
     VC __declspec() decoration level: 

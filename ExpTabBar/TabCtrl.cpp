@@ -166,7 +166,12 @@ void	CTabSkin::_DrawText(CDCHandle dc, CPoint ptOffset, const CTabItem& item, bo
 
 	UINT	uFormat;
 	//int		nWidth	= MtlComputeWidthOfText(item.m_strItem, dc.GetCurrentFont());
-	CString strTab = MtlCompactString(item.m_strItem, CTabBarConfig::s_nMaxTextLength);
+	CString strTab;
+	if (item.m_strDrawPath.GetLength() > 0) {
+		strTab = item.m_strDrawPath;
+	} else {
+		strTab = MtlCompactString(item.m_strItem, CTabBarConfig::s_nMaxTextLength);
+	}
 	if ( true /*nWidth > rcBtn.Width()*/ ) {
 		uFormat = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_LEFT | DT_END_ELLIPSIS;
 	} else {

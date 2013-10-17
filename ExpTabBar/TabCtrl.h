@@ -187,6 +187,7 @@ public:
 	CString			m_strItem;			// タブ名
 	CRect			m_rcItem;
 	int				m_nImgIndex;		// ImageListのインデックス
+	CString			m_strDrawPath;
 
 	LPITEMIDLIST	m_pidl;				// アイテムＩＤリスト
 	CString			m_strFullPath;		// フルパス
