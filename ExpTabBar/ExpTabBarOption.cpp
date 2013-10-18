@@ -233,6 +233,7 @@ private:
 bool	CThumbnailTooltipConfig::s_bUseThumbnailTooltip = false;
 CSize	CThumbnailTooltipConfig::s_MaxThumbnailSize(512, 256);
 int		CThumbnailTooltipConfig::s_nMaxThumbnailCache = 64;
+bool	CThumbnailTooltipConfig::s_bShowThumbnailOnAlt = false;
 
 bool	CThumbnailTooltipConfig::s_bMaxThumbnailSizeChanged = false;
 
@@ -250,6 +251,8 @@ void CThumbnailTooltipConfig::LoadConfig()
 		s_MaxThumbnailSize.cy	= value.get();
 	if (auto value = pt.get_optional<int>("Thumbtip.MaxThumbnailCache"))
 		s_nMaxThumbnailCache	= value.get();
+	if (auto value = pt.get_optional<bool>("Thumbtip.ShowThumbnailOnAlt"))
+		s_bShowThumbnailOnAlt = value.get();
 }
 
 void CThumbnailTooltipConfig::SaveConfig()
@@ -263,6 +266,7 @@ void CThumbnailTooltipConfig::SaveConfig()
 	pt.put("Thumbtip.MaxThumbnailSizeWidth"	, s_MaxThumbnailSize.cx);
 	pt.put("Thumbtip.MaxThumbnailSizeHeight", s_MaxThumbnailSize.cy);
 	pt.put("Thumbtip.MaxThumbnailCache"		, s_nMaxThumbnailCache);
+	pt.put("Thumbtip.ShowThumbnailOnAlt"	, s_bShowThumbnailOnAlt);
 
 	std::ofstream iniostream(g_szIniFileName, std::ios::out | std::ios::trunc);
 	write_ini(iniostream, pt);
@@ -286,6 +290,7 @@ public:
 		DDX_INT_RANGE(IDC_EDIT_MAXWIDTH			, (int&)s_MaxThumbnailSize.cx	, 64, 1024)
 		DDX_INT_RANGE(IDC_EDIT_MAXHEIGHT		, (int&)s_MaxThumbnailSize.cy	, 64, 1024)
 		DDX_INT_RANGE(IDC_EDIT_MAXTHUMBNAIL		, s_nMaxThumbnailCache	, 1, 2000)
+		DDX_CHECK(IDC_CHECK_SHOWTHUMBNAILONALT	, s_bShowThumbnailOnAlt)
     END_DDX_MAP()
 	
 

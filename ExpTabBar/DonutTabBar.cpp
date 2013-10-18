@@ -1730,8 +1730,15 @@ void	CDonutTabBar::DocumentComplete()
 			if (SUCCEEDED(hr)) {
 				ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
 				if (ListView.m_hWnd != NULL) {
-					int nPerPage = ListView.GetCountPerPage();
-					ListView.EnsureVisible(GetItemSelectedIndex(GetCurSel()) + nPerPage - 1, FALSE);
+					CComQIPtr<IFolderView2>	spFolderView = spShellView;
+					UINT viewMode = 0;
+					spFolderView->GetCurrentViewMode(&viewMode);
+					if (viewMode == FVM_ICON) {
+						//ListView.EnsureVisible(GetItemSelectedIndex(GetCurSel()), FALSE);
+					} else {
+						int nPerPage = ListView.GetCountPerPage();
+						ListView.EnsureVisible(GetItemSelectedIndex(GetCurSel()) + nPerPage - 1, FALSE);
+					}
 				}
 			}
 		}
@@ -2140,7 +2147,75 @@ void CDonutTabBar::_SaveSelectedIndex(int nIndex)
 		if (SUCCEEDED(hr)) {
 			ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
 			if (ListView.m_hWnd != NULL) {
-				SetItemSelectedIndex(nIndex , ListView.GetTopIndex());
+				CComQIPtr<IFolderView2> spFolderView = spShellView;
+				UINT viewMode = 0;
+				spFolderView->GetCurrentViewMode(&viewMode);
+				if (viewMode == FVM_ICON) {
+#if 0	// èdÇ©Ç¡ÇΩÇÃÇ≈Ç‚ÇﬂÇΩ
+					try {
+						HRESULT	hr;
+						CComPtr<IUIAutomation>	spUIAutomation;
+						hr = CoCreateInstance(__uuidof(CUIAutomation), NULL, CLSCTX_INPROC_SERVER, __uuidof(IUIAutomation), (void**)&spUIAutomation);
+						ATLASSERT(spUIAutomation);
+
+						CComPtr<IUIAutomationElement>	spUIElement;
+						hr = spUIAutomation->ElementFromHandle(ListView.m_hWnd, &spUIElement);
+						if (FAILED(hr))
+							AtlThrow(hr);
+
+						VARIANT varProp;
+						varProp.vt = VT_BOOL;
+						varProp.boolVal = VARIANT_FALSE;
+						CComPtr<IUIAutomationCondition>	spCondition1;
+						hr = spUIAutomation->CreatePropertyCondition(UIA_IsOffscreenPropertyId, varProp, &spCondition1);
+						if (FAILED(hr))
+							AtlThrow(hr);
+
+						varProp.vt = VT_I4;
+						varProp.intVal = UIA_ListItemControlTypeId;
+						CComPtr<IUIAutomationCondition>	spCondition2;
+						hr = spUIAutomation->CreatePropertyCondition(UIA_ControlTypePropertyId, varProp, &spCondition2);
+						if (FAILED(hr))
+							AtlThrow(hr);
+
+						CComPtr<IUIAutomationCondition>	spCondition3;
+						spUIAutomation->CreateAndCondition(spCondition1, spCondition2, &spCondition3);
+
+						CComPtr<IUIAutomationElementArray>	spElmArray;
+						hr = spUIElement->FindAll(TreeScope_Children, spCondition3, &spElmArray);
+						if (spElmArray == NULL)
+							AtlThrow(hr);
+
+						int nLength = 0;
+						hr = spElmArray->get_Length(&nLength);
+						if (nLength == 0)
+							AtlThrow(hr);
+						CComPtr<IUIAutomationElement>	spUIVisible;
+						hr = spElmArray->GetElement(nLength - 1, &spUIVisible);
+						if (spUIVisible == nullptr)
+							AtlThrow(hr);
+
+						SAFEARRAY*	pRuntimeId = nullptr;
+						hr = spUIVisible->GetRuntimeId(&pRuntimeId);
+						if (pRuntimeId == nullptr)
+							AtlThrow(hr);
+						LONG indicate = 3;
+						LONG runtimeIndex = 0;
+						hr = SafeArrayGetElement(pRuntimeId, &indicate, (void*)&runtimeIndex);
+						if (FAILED(hr))
+							AtlThrow(hr);
+
+						SetItemSelectedIndex(nIndex, runtimeIndex);
+					} catch (...) {
+						SetItemSelectedIndex(nIndex, 0);
+					}
+					//int nVisibleIndex = 0;
+					//spFolderView->GetVisibleItem(0, TRUE, &nVisibleIndex);
+					//SetItemSelectedIndex(nIndex, nVisibleIndex);
+#endif
+				} else {
+					SetItemSelectedIndex(nIndex, ListView.GetTopIndex());
+				}
 			}
 		}
 	}

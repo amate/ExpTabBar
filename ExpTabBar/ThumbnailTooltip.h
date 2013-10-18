@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <memory>
 #include <atlsync.h>
+#include <thread>
+#include <vector>
 
 namespace Gdiplus {
 	class Image;
@@ -33,6 +35,20 @@ public:
 		ImageData() : thumbnail(nullptr), bGifAnimation(false), nFrameCount(0) { }
 	};
 
+	struct CreateImageData {
+		std::thread	createThread;
+		std::wstring path;
+		CRect rcItem;
+
+		CreateImageData(std::thread&& thread, const std::wstring& path, const CRect& rcItem) 
+			: createThread(std::move(thread)), path(path), rcItem(rcItem)
+		{ }
+	};
+
+	enum {
+		WM_SHOWTHUMBNAILWINDOWFROMTHREAD = WM_APP + 100,
+	};
+
 	CThumbnailTooltip();
 	~CThumbnailTooltip();
 
@@ -51,11 +67,13 @@ public:
 		MSG_WM_CREATE( OnCreate )
 		MSG_WM_SIZE	( OnSize )
 		MSG_WM_TIMER( OnTimer )
+		MESSAGE_HANDLER_EX(WM_SHOWTHUMBNAILWINDOWFROMTHREAD, OnShowThumbnailWindowFromThread)
 	END_MSG_MAP()
 
 	int OnCreate(LPCREATESTRUCT lpCreateStruct);
 	void OnSize(UINT nType, CSize size);
 	void OnTimer(UINT_PTR nIDEvent);
+	LRESULT OnShowThumbnailWindowFromThread(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 private:
 	CRect	_CalcTooltipRect(const CRect& rcItem, const ImageData& ImageData);
@@ -73,6 +91,9 @@ private:
 	std::unordered_map<std::wstring, ImageData*>	m_mapImageCache;
 	CCriticalSection	m_cs;
 	bool	m_bAddImageCached;
+
+	std::wstring	m_currentThumbnailPath;
+	std::vector<std::unique_ptr<CreateImageData>>	m_vecpCreateImageData;
 };
 
 

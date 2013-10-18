@@ -318,7 +318,9 @@ void	CExpTabBand::OnListViewMouseMove(UINT nFlags, CPoint point)
 	if (m_ThumbnailTooltip.IsWindowVisible()) {
 		CPoint ptNow;
 		::GetCursorPos(&ptNow);
-		if (m_ptLastForMouseMove == ptNow) {
+		enum { kAreaSize = 10 };
+		CRect rcMouseArea(CPoint(m_ptLastForMouseMove.x - (kAreaSize / 2), m_ptLastForMouseMove.y - (kAreaSize / 2)), CSize(kAreaSize, kAreaSize));
+		if (rcMouseArea.PtInRect(ptNow)) {
 			return ;	// キーボードでの移動
 		}
 		CRect rcItem;
@@ -412,7 +414,6 @@ void	CExpTabBand::OnListViewKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags)
 		return ;
 	}
 	::GetCursorPos(&m_ptLastForMouseMove);
-	m_ptLastForMouseMove;
 	if (!_ShowThumbnailTooltip(nIndex, rcItem)) {
 		_HideThumbnailTooltip();
 	}
@@ -501,7 +502,7 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 
 			std::thread	td([this, vec]() {
 				for (auto it = vec.begin(); it != vec.end(); ++it) {
-					if (::GetKeyState(VK_ESCAPE) < 0)
+					if (::GetAsyncKeyState(VK_ESCAPE) < 0)
 						break;
 					m_ThumbnailTooltip.AddThumbnailCache(*it);
 				}

@@ -69,6 +69,7 @@ public:
 	static bool		s_bUseThumbnailTooltip;
 	static CSize	s_MaxThumbnailSize;	
 	static int		s_nMaxThumbnailCache;
+	static bool		s_bShowThumbnailOnAlt;
 
 	static bool		s_bMaxThumbnailSizeChanged;
 

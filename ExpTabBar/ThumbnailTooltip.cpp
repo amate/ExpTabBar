@@ -50,27 +50,54 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		KillTimer(m_TimerID);
 		m_TimerID = 0;
 	}
+
+	// Altキーを押しているときだけサムネイルを表示する
+	if (CThumbnailTooltipConfig::s_bShowThumbnailOnAlt && (GetKeyState(VK_MENU) < 0) == false) {
+		return false;
+	}
+
+	m_currentThumbnailPath = path;
+
 	CCritSecLock	lock(m_cs);
 	auto it = m_mapImageCache.find(path);
 	if (it != m_mapImageCache.end()) {
 		m_pNowImageData = it->second;
 	} else {
-		if (std::unique_ptr<ImageData> pdata = _CreateImageData(path.c_str())) {
-			// キャッシュのサイズを超えたので削除
-			if (m_bAddImageCached == false && m_mapImageCache.size() > CThumbnailTooltipConfig::s_nMaxThumbnailCache) {
-				ImageData& eraseData = *m_mapImageCache.begin()->second;
-				delete eraseData.thumbnail;
-				if (eraseData.bGifAnimation) {
-					std::for_each(eraseData.vecGifImage.begin(), eraseData.vecGifImage.end(), [](Gdiplus::Image* img) {
-						delete img;
-					});
-				}
-				delete m_mapImageCache.begin()->second;
-				m_mapImageCache.erase(m_mapImageCache.begin());
+		ShowWindow(FALSE);
+
+		// 二重に作成しないようにする
+		for (auto& createImageData : m_vecpCreateImageData) {
+			if (createImageData->path == path) {
+				createImageData->rcItem = rcItem;
+				return true;
 			}
-			auto it = m_mapImageCache.insert(std::make_pair(path, static_cast<ImageData*>(pdata.release())));
-			m_pNowImageData = it.first->second;
 		}
+		m_vecpCreateImageData.emplace_back(new CreateImageData(std::thread([this, path, rcItem]() {
+			::CoInitialize(NULL);
+			if (std::unique_ptr<ImageData> pdata = _CreateImageData(path.c_str())) {
+				CCritSecLock	lock(m_cs);
+				// キャッシュのサイズを超えたので削除
+				if (m_bAddImageCached == false && m_mapImageCache.size() > CThumbnailTooltipConfig::s_nMaxThumbnailCache) {
+					ImageData& eraseData = *m_mapImageCache.begin()->second;
+					delete eraseData.thumbnail;
+					if (eraseData.bGifAnimation) {
+						std::for_each(eraseData.vecGifImage.begin(), eraseData.vecGifImage.end(), [](Gdiplus::Image* img) {
+							delete img;
+						});
+					}
+					delete m_mapImageCache.begin()->second;
+					m_mapImageCache.erase(m_mapImageCache.begin());
+				}
+				auto it = m_mapImageCache.insert(std::make_pair(path, static_cast<ImageData*>(pdata.release())));
+				lock.Unlock();
+				auto thisThreadId = std::this_thread::get_id();
+				SendMessage(WM_SHOWTHUMBNAILWINDOWFROMTHREAD, (WPARAM)&thisThreadId);
+				//m_pNowImageData = it.first->second;
+			}
+			::CoUninitialize();
+		}), path, rcItem));
+		
+		return true;
 	}
 	if (m_pNowImageData) {
 		CRect rcTooltip = _CalcTooltipRect(rcItem, *m_pNowImageData);
@@ -90,32 +117,31 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		UpdateWindow();
 		SetLayeredWindowAttributes(m_hWnd, 0, 255, LWA_ALPHA);
 		return true;
-#if 0
-		//ShowWindow(FALSE);
-		//MoveWindow(&rcTooltip, FALSE);
-		//Invalidate(FALSE);
-		//UpdateWindow();
-		//SetRedraw(FALSE);
-		if (m_pNowImageData->bGifAnimation) {
-			m_TimerID = SetTimer(1, m_pNowImageData->vecDelayTime[0]);
-		}
-		Invalidate(FALSE);
-		UpdateWindow();
-
-		//SetWindowPos(HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
-		SetWindowPos(HWND_TOPMOST, &rcTooltip, SWP_NOACTIVATE | /*SWP_NOREDRAW | */SWP_NOCOPYBITS);
-		ShowWindow(SW_SHOWNA);
-
-
-		//SetRedraw(TRUE);
-#endif
-		return true;
 	}
 	return false;
 }
 
+LRESULT CThumbnailTooltip::OnShowThumbnailWindowFromThread(UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	std::thread::id& id = *(std::thread::id*)wParam;
+	for (auto it = m_vecpCreateImageData.begin(); it != m_vecpCreateImageData.end(); ++it) {
+		CreateImageData& data = *it->get();
+		if (data.createThread.get_id() == id) {
+			data.createThread.detach();
+			if (data.path == m_currentThumbnailPath) {
+				ShowThumbnailTooltip(data.path, data.rcItem);
+			}
+			m_vecpCreateImageData.erase(it);
+			break;
+		}
+	}
+	return 0;
+}
+
 void	CThumbnailTooltip::HideThumbnailTooltip()
 {
+	m_currentThumbnailPath.empty();
+
 	if ( IsWindowVisible() == false )
 		return ;
 
@@ -137,7 +163,7 @@ void	CThumbnailTooltip::AddThumbnailCache(LPCTSTR strPath)
 	if (it == m_mapImageCache.end()) {
 		if (std::unique_ptr<ImageData> pdata = _CreateImageData(strPath)) {
 			CCritSecLock	lock(m_cs);
-			m_mapImageCache.insert(std::make_pair<std::wstring, ImageData*>(strPath, pdata.release()));
+			m_mapImageCache.insert(std::make_pair(std::wstring(strPath), pdata.release()));
 		}
 	}
 }
