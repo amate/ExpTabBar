@@ -267,6 +267,10 @@ LRESULT CExpTabBand::OnListViewItemChanged(LPNMHDR pnmh)
 	LPNMLISTVIEW	pnmlv = (LPNMLISTVIEW)pnmh;
 	if (pnmlv->iItem == -1)
 		return 0;
+
+	// ドラッグ選択するとサムネイルツールチップは消すようにする
+	if (::GetCapture())
+		_HideThumbnailTooltip();
 	
 	/* アイコン部分が再描写されないバグに対処 */
 	RECT rcItem;
@@ -509,8 +513,8 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 			});
 			td.detach();
 		}
-	} else {
-		//_SetNoFullRowSelect();
+	} else if(::GetKeyState(VK_SHIFT) < 0) {
+		m_ThumbnailTooltip.ClearImageCache();
 	}
 }
 
@@ -785,6 +789,8 @@ void	CExpTabBand::_SetNoFullRowSelect()
 	if (spShellFolderView3) {
 		DWORD	dwFlags = 0;
 		spShellFolderView3->get_FolderFlags(&dwFlags);
+		if (CTabBarConfig::s_bAlwaysShowColumHeaders)
+			dwFlags &= ~FWF_NOHEADERINALLVIEWS;	// Only show the column header in details view mode.　を取り除く
 		if (bNoFullRaw)
 			dwFlags &= ~FWF_FULLROWSELECT;
 		else

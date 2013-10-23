@@ -39,6 +39,7 @@ int		CTabBarConfig::s_nMaxHistoryCount	= 16;
 bool	CTabBarConfig::s_bMargeControlPanel = false;
 bool	CTabBarConfig::s_bNoFullRowSelect	= true;
 bool	CTabBarConfig::s_bAddressBarNewTabOpen = false;
+bool	CTabBarConfig::s_bAlwaysShowColumHeaders = false;
 
 /// ê›íËÇì«Ç›çûÇﬁ
 void	CTabBarConfig::LoadConfig()
@@ -81,6 +82,8 @@ void	CTabBarConfig::LoadConfig()
 		s_bNoFullRowSelect	= value.get();
 	if (auto value = pt.get_optional<bool>("Tab.AddressBarNewTabOpen"))
 		s_bAddressBarNewTabOpen	= value.get();
+	if (auto value = pt.get_optional<bool>("Tab.AlwaysShowColumHeaders"))
+		s_bAlwaysShowColumHeaders = value.get();
 }
 
 /// ê›íËÇï€ë∂Ç∑ÇÈ
@@ -108,6 +111,7 @@ void	CTabBarConfig::SaveConfig()
 	pt.put("Tab.MargeControlPanel"	, s_bMargeControlPanel);
 	pt.put("Tab.NoFullRowSelect"	, s_bNoFullRowSelect);
 	pt.put("Tab.AddressBarNewTabOpen", s_bAddressBarNewTabOpen);
+	pt.put("Tab.AlwaysShowColumHeaders", s_bAlwaysShowColumHeaders);
 
 	std::ofstream iniostream(g_szIniFileName, std::ios::out | std::ios::trunc);
 	write_ini(iniostream, pt);
@@ -148,6 +152,7 @@ public:
 		DDX_CHECK(IDC_CHECK_MARGECONTROLPANEL	, s_bMargeControlPanel	)
 		DDX_CHECK(IDC_CHECK_NOFULLROWSELECT		, s_bNoFullRowSelect	)
 		DDX_CHECK(IDC_CHECK_ADDRESSBAR_NEWTABOPEN, s_bAddressBarNewTabOpen)
+		DDX_CHECK(IDC_CHECK_ALWAYS_SHOWCOLUMHEADERS, s_bAlwaysShowColumHeaders)
     END_DDX_MAP()
 	
 

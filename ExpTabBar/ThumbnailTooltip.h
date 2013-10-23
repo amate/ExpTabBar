@@ -57,6 +57,7 @@ public:
 
 	void	AddThumbnailCache(LPCTSTR strPath);
 	void	OnLocationChanged();
+	void	ClearImageCache() { _ClearImageCache(); }
 
 	// Overrides
 	void DoPaint(CDCHandle dc, RECT& /*rect*/);
