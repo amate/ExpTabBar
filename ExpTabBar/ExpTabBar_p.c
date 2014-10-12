@@ -4,7 +4,7 @@
 
 
  /* File created by MIDL compiler version 8.00.0603 */
-/* at Thu Oct 24 05:17:24 2013
+/* at Mon Aug 25 02:31:27 2014
  */
 /* Compiler settings for ExpTabBar.idl:
     Oicf, W1, Zp8, env=Win32 (32b run), target_arch=X86 8.00.0603 

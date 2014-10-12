@@ -63,7 +63,7 @@ class __declspec(uuid("597EEB5A-D2DD-46E1-8BD2-C03CF13B8C3E"))
                           CAppMessageLoop
 {
 public:
-    CExecuteCommandVerb() : _cRef(1), _psia(NULL), _punkSite(NULL)
+	CExecuteCommandVerb() : _cRef(1), _psia(NULL), _punkSite(NULL)
     {
     }
 
@@ -71,7 +71,7 @@ public:
 
     // IUnknown
     IFACEMETHODIMP QueryInterface(REFIID riid, void **ppv)
-    {
+    {		
         static const QITAB qit[] =
         {
             QITABENT(CExecuteCommandVerb, IExecuteCommand),        // required
@@ -105,7 +105,7 @@ public:
         return S_OK;
     }
 
-    IFACEMETHODIMP SetParameters(PCWSTR /*pszParameters*/)
+    IFACEMETHODIMP SetParameters(PCWSTR pszParameters)
 	{ return S_OK; }
 
     IFACEMETHODIMP SetPosition(POINT pt)
@@ -123,7 +123,7 @@ public:
     IFACEMETHODIMP SetNoShowUI(BOOL /* fNoShowUI */)
     { return S_OK; }
 
-    IFACEMETHODIMP SetDirectory(PCWSTR /*pszDirectory*/)
+    IFACEMETHODIMP SetDirectory(PCWSTR pszDirectory)
     { return S_OK; }
 
     IFACEMETHODIMP Execute();
@@ -142,7 +142,7 @@ public:
     }
 
     // IInitializeCommand
-    IFACEMETHODIMP Initialize(PCWSTR /*pszCommandName*/, IPropertyBag * /* ppb */)
+    IFACEMETHODIMP Initialize(PCWSTR pszCommandName, IPropertyBag*  ppb )
 	{
         // The verb name is in pszCommandName, this handler can varry its behavior
         // based on the command name (implementing different verbs) or the
@@ -182,7 +182,9 @@ public:
 		if (_psia == nullptr) {		
 			// タスクバーの時計の右クリックメニューのプロパティをクリックしたときに
 			// 自前で"通知領域アイコン\\システム アイコン"を開かせる
-			RunExplorer(L"コントロール パネル\\すべてのコントロール パネル項目\\通知領域アイコン\\システム アイコン");
+			//RunExplorer(L"コントロール パネル\\すべてのコントロール パネル項目\\通知領域アイコン\\システム アイコン");
+			UnRegisterExecuteCommandVerb();
+			MessageBox(NULL, L"一時的にタブ取り込みを無効化しました\nもう一度実行してください", L"openInTabの起動に失敗。", MB_ICONERROR);
 			return ;
 		}
 
@@ -314,6 +316,7 @@ int APIENTRY wWinMain(HINSTANCE, HINSTANCE, PWSTR pszCmdLine, int)
     {
         DisableComExceptionHandling();
         if (StrStrI(pszCmdLine, L"-Embedding")) {
+			assert(FALSE);
             CExecuteCommandVerb *pAppDrop = new (std::nothrow) CExecuteCommandVerb();
             if (pAppDrop) {
                 pAppDrop->Run();

@@ -133,7 +133,8 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 	if (punkSite) {
 		//Get the parent window.
 		CComQIPtr<IOleWindow> pOleWindow(punkSite);
-		ATLASSERT(pOleWindow);
+		if (pOleWindow == nullptr)
+			return E_FAIL;
 
 		HWND	hWndParent;
 		pOleWindow->GetWindow(&hWndParent);
@@ -476,7 +477,9 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 }
 
 
-
+// タブバーダブルクリック
+// Ctrlを押しながらでフォルダ内のすべての画像のサムネイルキャッシュを作成
+// Shiftを押しながらでサムネイルキャッシュを削除
 void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 {
 	if (::GetKeyState(VK_CONTROL) < 0) {
@@ -542,6 +545,25 @@ void	CExpTabBand::OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOt
 	SetMsgHandled(FALSE);
 
 	_RegisterExecuteCommandVerb(!(nState != WA_INACTIVE));
+}
+
+/// なかなか終了しないエクスプローラーを強制終了させる
+void	CExpTabBand::OnExplorerDestroy()
+{
+	SetMsgHandled(FALSE);
+
+	HWND hWndTarget = FindWindow(_T("ExpTabBar_NotifyWindow"), NULL);
+	if (hWndTarget == NULL) {
+		std::thread([]{
+			::Sleep(5 * 1000);
+
+			DWORD processID = GetCurrentProcessId();
+			HANDLE h = ::OpenProcess(PROCESS_TERMINATE, FALSE, processID);
+			ATLASSERT(h);
+			::TerminateProcess(h, 0);
+			::CloseHandle(h);
+		}).detach();
+	}
 }
 
 void	CExpTabBand::OnAddressBarProgressParentNotify(UINT message, UINT nChildID, LPARAM lParam)
@@ -809,6 +831,8 @@ void	CExpTabBand::_RegisterExecuteCommandVerb(bool bRegister)
 
 	CRegKey	rkFolderCommand;
 	if (bRegister) {
+		if (::GetAsyncKeyState(VK_MENU) < 0)	// alt 押しながらエクスプローラーをinactiveにするときは登録しない
+			return;
 		if (rkFolderCommand.Create(HKEY_CURRENT_USER, _T("Software\\Classes\\Folder\\shell\\open\\command")) == ERROR_SUCCESS) {
 			rkFolderCommand.SetStringValue(_T("DelegateExecute"), OPENINPROCESSGUID);
 		}

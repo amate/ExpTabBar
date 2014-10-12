@@ -443,7 +443,7 @@ void	CFavoritesOption::SaveConfig()
 	}
 
 	ostream.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>));
-	write_xml(ostream, pt, xml_writer_make_settings(L' ', 2, xml_parser::widen<wchar_t>("utf-8")));
+	write_xml(ostream, pt, xml_writer_make_settings<std::wstring>(L' ', 2, xml_parser::widen<std::wstring>("utf-8")));
 
 }
 

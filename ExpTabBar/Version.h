@@ -5,5 +5,5 @@
 
 #pragma once
 
-#define EXPTABBARVERSION	_T("1.5")
+#define EXPTABBARVERSION	_T("1.6")
 

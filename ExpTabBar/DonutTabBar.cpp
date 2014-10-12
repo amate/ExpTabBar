@@ -200,6 +200,9 @@ void	CDonutTabBar::SaveAllTab()
 void	CDonutTabBar::RestoreAllTab()
 {
 	CString	TabList = Misc::GetExeDirectory() + _T("TabList.xml");
+	if (::PathFileExists(TabList) == FALSE)
+		return;
+
 	vector<CTabItem>	vecItem;
 	CTabItem			item;
 
@@ -426,6 +429,8 @@ void	CDonutTabBar::SaveHistory()
 void	CDonutTabBar::RestoreHistory()
 {
 	CString	History = Misc::GetExeDirectory() + _T("History.xml");
+	if (::PathFileExists(History) == FALSE)
+		return;
 	vector<HistoryItem>	vecItem;
 	HistoryItem			item;
 
@@ -1561,13 +1566,13 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 			::CoTaskMemFree(pidl);
 
 			::PostMessage(GetTopLevelWindow(), WM_CLOSE, 0, 0);
-/*
-			DWORD	dwProcessID = 0;
-			GetWindowThreadProcessId(GetTopLevelWindow(), &dwProcessID);
-			ATLASSERT(dwProcessID == 0);
-			HANDLE h = ::OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessID);
-			ATLASSERT(h == NULL);
-			::TerminateProcess(h, 0);*/
+
+			//DWORD	dwProcessID = 0;
+			//GetWindowThreadProcessId(GetTopLevelWindow(), &dwProcessID);
+			//ATLASSERT(dwProcessID == 0);
+			//HANDLE h = ::OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessID);
+			//ATLASSERT(h == NULL);
+			//::TerminateProcess(GetCurrentProcess(), 0);
 			return;
 		} else {	// 他のエクスプローラーはない
 

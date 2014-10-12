@@ -81,11 +81,12 @@ ALT_MSG_MAP(3)	// DirectUI
 		MSG_WM_KEYDOWN	 ( OnListViewKeyUp	)
 		MSG_WM_KILLFOCUS ( OnListViewKillFocus )
 	}
-ALT_MSG_MAP(5)
+ALT_MSG_MAP(5)	// TabBar(this)
 	MSG_WM_LBUTTONDBLCLK( OnTabBarLButtonDblClk	)
 	MSG_WM_TIMER		( OnTabBarTimer	)
-ALT_MSG_MAP(6)
+ALT_MSG_MAP(6)	// Explorer
 	MSG_WM_ACTIVATE( OnExplorerActivate	)
+	MSG_WM_CLOSE( OnExplorerDestroy )
 ALT_MSG_MAP(7)	// addressbar progress
 	MSG_WM_PARENTNOTIFY( OnAddressBarProgressParentNotify )
 ALT_MSG_MAP(8)	// addressbar edit
@@ -131,6 +132,7 @@ public:
 	void	OnTabBarTimer(UINT_PTR nIDEvent);
 
 	void	OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOther);
+	void	OnExplorerDestroy();
 
 	void	OnAddressBarProgressParentNotify(UINT message, UINT nChildID, LPARAM lParam);
 

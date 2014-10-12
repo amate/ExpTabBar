@@ -118,7 +118,7 @@
       <ModuleDefinitionFile>.\ExpTabBar.def</ModuleDefinitionFile>
       <AdditionalDependencies>comsvcs.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <RegisterOutput>true</RegisterOutput>
+      <RegisterOutput>false</RegisterOutput>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">

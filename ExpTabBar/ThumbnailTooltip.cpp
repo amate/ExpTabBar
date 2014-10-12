@@ -101,7 +101,7 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 	}
 	if (m_pNowImageData) {
 		CRect rcTooltip = _CalcTooltipRect(rcItem, *m_pNowImageData);
-		SetLayeredWindowAttributes(m_hWnd, 0, 0, LWA_ALPHA);
+		//SetLayeredWindowAttributes(m_hWnd, 0, 0, LWA_ALPHA);
 		MoveWindow(&rcTooltip, FALSE);
 
 		if (m_pNowImageData->bGifAnimation) {
@@ -115,7 +115,7 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		ShowWindow(SW_SHOWNOACTIVATE);
 		Invalidate(FALSE);
 		UpdateWindow();
-		SetLayeredWindowAttributes(m_hWnd, 0, 255, LWA_ALPHA);
+		//SetLayeredWindowAttributes(m_hWnd, 0, 255, LWA_ALPHA);
 		return true;
 	}
 	return false;

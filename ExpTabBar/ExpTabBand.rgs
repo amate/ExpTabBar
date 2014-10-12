@@ -17,14 +17,13 @@ HKCR
 			ForceRemove Programmable
 			InprocServer32 = s '%MODULE%'
 			{
-				val ThreadingModel = s 'Both'
+				val ThreadingModel = s 'Apartment'
 			}
 			TypeLib = s '{581F1B52-FD71-40A2-A256-0556E95FF4E7}'
 			Version = s '1.0'
 		}
 	}
 }
-
 
 HKLM
 {
@@ -43,4 +42,29 @@ HKLM
     }
 }
 
+HKLM
+{
+	NoRemove SOFTWARE
+	{
+		NoRemove Microsoft
+		{
+			NoRemove Windows
+			{
+				NoRemove CurrentVersion
+				{
+					NoRemove Explorer
+					{
+						NoRemove 'Browser Helper Objects'
+						{
+							ForceRemove {6BE37F72-F2B9-4887-B819-5F086BE270CF}
+							{
+								val NoInternetExplorer = d '1'
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
 

@@ -12,6 +12,9 @@
 
 void	InstallRegKey()
 {
+	if (::GetAsyncKeyState(VK_CONTROL) < 0)
+		return;
+
 	{// [-HKEY_CURRENT_USER\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\Bags]
 		CRegKey rk;
 		rk.Open(HKEY_CURRENT_USER, _T("Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell"));
