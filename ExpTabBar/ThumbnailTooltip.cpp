@@ -59,44 +59,39 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 	m_currentThumbnailPath = path;
 
 	CCritSecLock	lock(m_cs);
-	auto it = m_mapImageCache.find(path);
-	if (it != m_mapImageCache.end()) {
-		m_pNowImageData = it->second;
+	auto it = m_ImageCache.find(path);
+	if (it != m_ImageCache.end()) {
+		m_pNowImageData = it->get();
 	} else {
 		ShowWindow(FALSE);
 
 		// 二重に作成しないようにする
-		for (auto& createImageData : m_vecpCreateImageData) {
-			if (createImageData->path == path) {
-				createImageData->rcItem = rcItem;
-				return true;
-			}
+		auto itcreateImage = m_CreateImageData.find(path);
+		if (itcreateImage != m_CreateImageData.end()) {
+			itcreateImage->get()->rcItem = rcItem;
+			return true;
 		}
-		m_vecpCreateImageData.emplace_back(new CreateImageData(std::thread([this, path, rcItem]() {
+
+		m_CreateImageData.emplace(new CreateImageData(std::thread([this, path, rcItem]() {
 			::CoInitialize(NULL);
 			if (std::unique_ptr<ImageData> pdata = _CreateImageData(path.c_str())) {
 				CCritSecLock	lock(m_cs);
 				// キャッシュのサイズを超えたので削除
-				if (m_bAddImageCached == false && m_mapImageCache.size() > CThumbnailTooltipConfig::s_nMaxThumbnailCache) {
-					ImageData& eraseData = *m_mapImageCache.begin()->second;
-					delete eraseData.thumbnail;
-					if (eraseData.bGifAnimation) {
-						std::for_each(eraseData.vecGifImage.begin(), eraseData.vecGifImage.end(), [](Gdiplus::Image* img) {
-							delete img;
-						});
-					}
-					delete m_mapImageCache.begin()->second;
-					m_mapImageCache.erase(m_mapImageCache.begin());
+				if (m_bAddImageCached == false &&
+					m_ImageCache.size() > CThumbnailTooltipConfig::s_nMaxThumbnailCache)
+				{
+					auto& seqList =  m_ImageCache.get<seq>();
+					seqList.erase(seqList.begin());
 				}
-				auto it = m_mapImageCache.insert(std::make_pair(path, static_cast<ImageData*>(pdata.release())));
-				lock.Unlock();
-				auto thisThreadId = std::this_thread::get_id();
-				SendMessage(WM_SHOWTHUMBNAILWINDOWFROMTHREAD, (WPARAM)&thisThreadId);
-				//m_pNowImageData = it.first->second;
+				pdata->path = path;
+				auto it = m_ImageCache.emplace(std::move(pdata));
+			} else {
+				ATLASSERT(FALSE);
 			}
+			SendMessage(WM_SHOWTHUMBNAILWINDOWFROMTHREAD, (WPARAM)&path);
 			::CoUninitialize();
 		}), path, rcItem));
-		
+
 		return true;
 	}
 	if (m_pNowImageData) {
@@ -121,19 +116,19 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 	return false;
 }
 
+// キャッシュの作成が完了したので、表示を行う
 LRESULT CThumbnailTooltip::OnShowThumbnailWindowFromThread(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	std::thread::id& id = *(std::thread::id*)wParam;
-	for (auto it = m_vecpCreateImageData.begin(); it != m_vecpCreateImageData.end(); ++it) {
-		CreateImageData& data = *it->get();
-		if (data.createThread.get_id() == id) {
-			data.createThread.detach();
-			if (data.path == m_currentThumbnailPath) {
-				ShowThumbnailTooltip(data.path, data.rcItem);
-			}
-			m_vecpCreateImageData.erase(it);
-			break;
+	const std::wstring& path = *(std::wstring*)wParam;
+	auto itfound = m_CreateImageData.find(path);
+	if (itfound != m_CreateImageData.end()) {
+		itfound->get()->createThread.detach();
+		if (path == m_currentThumbnailPath) {
+			ShowThumbnailTooltip(path, itfound->get()->rcItem);
 		}
+		m_CreateImageData.erase(itfound);
+	} else {
+		ATLASSERT(FALSE);
 	}
 	return 0;
 }
@@ -156,15 +151,47 @@ void	CThumbnailTooltip::HideThumbnailTooltip()
 }
 
 
-void	CThumbnailTooltip::AddThumbnailCache(LPCTSTR strPath)
+void	CThumbnailTooltip::AddThumbnailCache(std::wstring path, CRect rcItem /*= CRect()*/)
 {
-	m_bAddImageCached = true;
-	auto it = m_mapImageCache.find(strPath);
-	if (it == m_mapImageCache.end()) {
-		if (std::unique_ptr<ImageData> pdata = _CreateImageData(strPath)) {
-			CCritSecLock	lock(m_cs);
-			m_mapImageCache.insert(std::make_pair(std::wstring(strPath), pdata.release()));
+	//m_bAddImageCached = true;
+	//auto it = m_mapImageCache.find(path);
+	//if (it == m_mapImageCache.end()) {
+	//	if (std::unique_ptr<ImageData> pdata = _CreateImageData(path)) {
+	//		CCritSecLock	lock(m_cs);
+	//		m_mapImageCache.emplace(strPath, std::move(pdata));
+	//	}
+	//}
+
+	CCritSecLock	lock(m_cs);
+	auto it = m_ImageCache.find(path);
+	if (it == m_ImageCache.end()) {
+
+		// 二重に作成しないようにする
+		auto itcreateImage = m_CreateImageData.find(path);
+		if (itcreateImage != m_CreateImageData.end()) {
+			itcreateImage->get()->rcItem = rcItem;
+			return;
 		}
+
+		m_CreateImageData.emplace(new CreateImageData(std::thread([this, path, rcItem]() {
+			::CoInitialize(NULL);
+			if (std::unique_ptr<ImageData> pdata = _CreateImageData(path.c_str())) {
+				CCritSecLock	lock(m_cs);
+				// キャッシュのサイズを超えたので削除
+				if (m_bAddImageCached == false &&
+					m_ImageCache.size() > CThumbnailTooltipConfig::s_nMaxThumbnailCache)
+				{
+					auto& seqList = m_ImageCache.get<seq>();
+					seqList.erase(seqList.begin());
+				}
+				pdata->path = path;
+				auto it = m_ImageCache.emplace(std::move(pdata));
+			} else {
+				ATLASSERT(FALSE);
+			}
+			SendMessage(WM_SHOWTHUMBNAILWINDOWFROMTHREAD, (WPARAM)&path);
+			::CoUninitialize();
+		}), path, rcItem));
 	}
 }
 
@@ -350,7 +377,7 @@ std::unique_ptr<CThumbnailTooltip::ImageData>	CThumbnailTooltip::_CreateImageDat
 					graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
 					imgdata.vecGifImage.push_back(imgPage);
 				}
-				delete propItems;
+				delete[] (BYTE*)propItems;
 				//imgdata.thumbnail	= bmpRaw->Clone();
 			}
 		}
@@ -372,16 +399,16 @@ std::unique_ptr<CThumbnailTooltip::ImageData>	CThumbnailTooltip::_CreateImageDat
 /// イメージキャッシュをクリアする
 void	CThumbnailTooltip::_ClearImageCache()
 {
-	std::for_each(m_mapImageCache.begin(), m_mapImageCache.end(), [](std::pair<std::wstring, ImageData*> pr) {
-		ImageData& imgdata = *pr.second;
-		delete imgdata.thumbnail;
-		if (imgdata.bGifAnimation) {
-			std::for_each(imgdata.vecGifImage.begin(), imgdata.vecGifImage.end(), [](Gdiplus::Image* img) {
-				delete img;
-			});
-		}
-		delete pr.second;
-	});
-	m_mapImageCache.clear();
+	{
+		CCritSecLock	lock(m_cs);
+		m_ImageCache.clear();
+	}
+
+	for (auto& createImageData : m_CreateImageData)
+		createImageData.get()->createThread.detach();
+	m_CreateImageData.clear();
+
+	m_pNowImageData = nullptr;
+	m_currentThumbnailPath.clear();
 }
 

@@ -34,8 +34,12 @@ public:
 	}
 	void	Term()
 	{
-		free(m_pImageCodecInfo);
-		Gdiplus::GdiplusShutdown(m_token);
+		if (m_pImageCodecInfo) {
+			free(m_pImageCodecInfo);
+			m_pImageCodecInfo = nullptr;
+			Gdiplus::GdiplusShutdown(m_token);
+			m_token = 0;
+		}
 	}
 
 	ImageCodecInfo*	GetEncoderByExtension(LPCWSTR extension)

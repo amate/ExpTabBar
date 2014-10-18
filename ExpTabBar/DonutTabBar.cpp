@@ -83,6 +83,20 @@ void	CDonutTabBar::Initialize(IUnknown* punk, CMessageMap* pMap)
 	m_pExpTabBandMessageMap = pMap;
 }
 
+void	CDonutTabBar::UnInitialize()
+{
+	if (m_spTravelLogStg)
+		m_spTravelLogStg.Release();
+
+	if (m_spSearchBoxInfo)
+		m_spSearchBoxInfo.Release();
+
+	if (m_spShellBrowser)
+		m_spShellBrowser.Release();
+
+	m_pExpTabBandMessageMap = nullptr;
+}
+
 
 // フラグによって挿入位置を返す
 int		CDonutTabBar::_ManageInsert(bool bLink)
@@ -1034,29 +1048,11 @@ int		CDonutTabBar::OnTabCreate(LPITEMIDLIST pidl, bool bAddLast /*= false*/, boo
 
 	item.m_strFullPath = GetFullPathFromIDList(pidl);
 
-	bool bMulti = false;
-	int nCount = static_cast<int>(m_items.size());
-	for (int i = 0; i < nCount; ++i) {
-		if (m_items[i].m_strItem.CompareNoCase(item.m_strItem) == 0) {
-			auto funcGetLastPath = [this](const CString& path) -> CString {
-				int nSlashPos = path.ReverseFind(L'\\');
-				if (nSlashPos != -1)
-					return path.Left(nSlashPos);
-				return path;
-			};
-			m_items[i].m_strDrawPath.Format(_T("%s | %s"), m_items[i].m_strItem, funcGetLastPath(m_items[i].m_strFullPath));
-
-			if (bMulti == false) {
-				item.m_strDrawPath.Format(_T("%s | %s"),  item.m_strItem, funcGetLastPath(item.m_strFullPath));
-				bMulti = true;
-			}
-		}
-	}
-
 	item.m_pTravelLogBack = new TRAVELLOG;
 	item.m_pTravelLogFore = new TRAVELLOG;
 
 	int nNewIndex = InsertItem(nPos, item);
+	SetItemText(nNewIndex, item.m_strItem);
 	if (bLink && CTabBarConfig::s_bLinkActive)
 		SetCurSel(nNewIndex);
 	return nNewIndex;
@@ -1632,7 +1628,10 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 		m_bNavigateLockOpening = false;
 		return;
 	}
-	REFRESH:
+REFRESH:
+
+	/* フルパスを変更 */
+	SetItemFullPath(nCurIndex, strFullPath);
 
 	/* タブ名を変更 */
 	SetItemText(nCurIndex, title/*GetNameFromIDList(pidl)*/);
@@ -1643,9 +1642,6 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 
 	/* アイテムＩＤリストを変更 */
 	SetItemIDList(nCurIndex, pidl);
-
-	/* フルパスを変更 */
-	SetItemFullPath(nCurIndex, strFullPath);
 }
 
 
@@ -1815,7 +1811,11 @@ void	CDonutTabBar::OnDestroy()
 		m_bSaveAllTab = false;
 	}
 
+	m_tipHistroy.DestroyWindow();
+
 	CFavoritesOption::CleanFavoritesItem();
+
+	m_menuPopup.DestroyMenu();
 
 	KillTimer(AutoSaveTimerID);
 

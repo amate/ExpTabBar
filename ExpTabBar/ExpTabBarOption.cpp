@@ -238,6 +238,7 @@ private:
 bool	CThumbnailTooltipConfig::s_bUseThumbnailTooltip = false;
 CSize	CThumbnailTooltipConfig::s_MaxThumbnailSize(512, 256);
 int		CThumbnailTooltipConfig::s_nMaxThumbnailCache = 64;
+int		CThumbnailTooltipConfig::s_nMaxPreCache = 0;
 bool	CThumbnailTooltipConfig::s_bShowThumbnailOnAlt = false;
 
 bool	CThumbnailTooltipConfig::s_bMaxThumbnailSizeChanged = false;
@@ -256,6 +257,8 @@ void CThumbnailTooltipConfig::LoadConfig()
 		s_MaxThumbnailSize.cy	= value.get();
 	if (auto value = pt.get_optional<int>("Thumbtip.MaxThumbnailCache"))
 		s_nMaxThumbnailCache	= value.get();
+	if (auto value = pt.get_optional<int>("Thumbtip.MaxPreCache"))
+		s_nMaxPreCache = value.get();
 	if (auto value = pt.get_optional<bool>("Thumbtip.ShowThumbnailOnAlt"))
 		s_bShowThumbnailOnAlt = value.get();
 }
@@ -270,7 +273,8 @@ void CThumbnailTooltipConfig::SaveConfig()
 	pt.put("Thumbtip.UseThumbnailTooltip"	, s_bUseThumbnailTooltip);
 	pt.put("Thumbtip.MaxThumbnailSizeWidth"	, s_MaxThumbnailSize.cx);
 	pt.put("Thumbtip.MaxThumbnailSizeHeight", s_MaxThumbnailSize.cy);
-	pt.put("Thumbtip.MaxThumbnailCache"		, s_nMaxThumbnailCache);
+	pt.put("Thumbtip.MaxThumbnailCache", s_nMaxThumbnailCache);
+	pt.put("Thumbtip.MaxPreCache", s_nMaxPreCache);
 	pt.put("Thumbtip.ShowThumbnailOnAlt"	, s_bShowThumbnailOnAlt);
 
 	std::ofstream iniostream(g_szIniFileName, std::ios::out | std::ios::trunc);
@@ -292,10 +296,11 @@ public:
 	// DDX map
     BEGIN_DDX_MAP(CThumbnailTooltipPropertyPage)
 		DDX_CHECK(IDC_CHECK_USRTHUMBNAILTOOLTIP	, s_bUseThumbnailTooltip )
-		DDX_INT_RANGE(IDC_EDIT_MAXWIDTH			, (int&)s_MaxThumbnailSize.cx	, 64, 1024)
-		DDX_INT_RANGE(IDC_EDIT_MAXHEIGHT		, (int&)s_MaxThumbnailSize.cy	, 64, 1024)
+		DDX_INT_RANGE(IDC_EDIT_MAXWIDTH			, s_MaxThumbnailSize.cx	, 64L, 1024L)
+		DDX_INT_RANGE(IDC_EDIT_MAXHEIGHT		, s_MaxThumbnailSize.cy	, 64L, 1024L)
 		DDX_INT_RANGE(IDC_EDIT_MAXTHUMBNAIL		, s_nMaxThumbnailCache	, 1, 2000)
-		DDX_CHECK(IDC_CHECK_SHOWTHUMBNAILONALT	, s_bShowThumbnailOnAlt)
+		DDX_INT_RANGE(IDC_EDIT_MAXPRECACHE		, s_nMaxPreCache, 0, 20)
+		DDX_CHECK(IDC_CHECK_SHOWTHUMBNAILONALT, s_bShowThumbnailOnAlt)
     END_DDX_MAP()
 	
 
@@ -311,6 +316,7 @@ public:
 		CUpDownCtrl(GetDlgItem(IDC_SPIN1)).SetRange(64, 1024);
 		CUpDownCtrl(GetDlgItem(IDC_SPIN2)).SetRange(64, 1024);
 		CUpDownCtrl(GetDlgItem(IDC_SPIN3)).SetRange(1, 2000);
+		CUpDownCtrl(GetDlgItem(IDC_SPIN4)).SetRange(0, 20);
 
 		return 0;
 	}

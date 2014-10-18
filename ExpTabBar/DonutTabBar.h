@@ -61,6 +61,7 @@ public:
 	~CDonutTabBar();
 
 	void	Initialize(IUnknown* punk, CMessageMap* pMap);
+	void	UnInitialize();
 
 	void	SaveAllTab();
 	void	RestoreAllTab();
@@ -212,8 +213,8 @@ private:
 
 
 	vector<HistoryItem>	m_vecHistoryItem;
-	CMenu			m_menuHistory;
-	CMenu			m_menuFavorites;
+	CMenuHandle			m_menuHistory;
+	CMenuHandle			m_menuFavorites;
 	CToolTipCtrl	m_tipHistroy;
 
 	HWND			m_hSearch;

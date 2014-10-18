@@ -10,10 +10,13 @@
 #include <atlsync.h>
 #include <thread>
 #include <vector>
+#include <boost\multi_index_container.hpp>
+#include <boost\multi_index\sequenced_index.hpp>
+#include <boost\multi_index\hashed_index.hpp>
+#include <boost\multi_index\member.hpp>
+#include "GdiplusUtil.h"
 
-namespace Gdiplus {
-	class Image;
-};
+using namespace boost::multi_index;
 
 
 class CThumbnailTooltip : 
@@ -24,6 +27,7 @@ public:
 	DECLARE_WND_CLASS_EX(NULL, /*CS_HREDRAW | CS_VREDRAW |*/ CS_DROPSHADOW, 0);
 
 	struct ImageData {
+		std::wstring path;
 		Gdiplus::Image*	thumbnail;
 		CSize	ActualSize;
 		CString strInfoTipText;
@@ -32,7 +36,18 @@ public:
 		std::vector<Gdiplus::Image*>	vecGifImage;
 		std::vector<int>				vecDelayTime;
 		UINT	nFrameCount;
+
 		ImageData() : thumbnail(nullptr), bGifAnimation(false), nFrameCount(0) { }
+
+		~ImageData()
+		{
+			if (thumbnail)
+				delete thumbnail;
+			if (bGifAnimation) {
+				for (auto img : vecGifImage)
+					delete img;
+			}
+		}
 	};
 
 	struct CreateImageData {
@@ -45,6 +60,19 @@ public:
 		{ }
 	};
 
+	
+	struct order {}; // 辞書順のタグ
+	struct seq {}; // 挿入順のタグ
+
+	template<class T>
+	using MapContainer = multi_index_container<
+		std::unique_ptr<T>,
+		indexed_by<
+			hashed_unique<tag<order>, member<T, std::wstring, &T::path>>,
+			sequenced<tag<seq> > // 挿入順
+		>
+	>;
+
 	enum {
 		WM_SHOWTHUMBNAILWINDOWFROMTHREAD = WM_APP + 100,
 	};
@@ -55,7 +83,8 @@ public:
 	bool	ShowThumbnailTooltip(std::wstring path, CRect rcItem);
 	void	HideThumbnailTooltip();
 
-	void	AddThumbnailCache(LPCTSTR strPath);
+	void	LockImageCache() { m_bAddImageCached = true; }
+	void	AddThumbnailCache(std::wstring path, CRect rcItem = CRect());
 	void	OnLocationChanged();
 	void	ClearImageCache() { _ClearImageCache(); }
 
@@ -89,12 +118,12 @@ private:
 	UINT		m_nFramePosition;
 	UINT_PTR	m_TimerID;
 
-	std::unordered_map<std::wstring, ImageData*>	m_mapImageCache;
+	MapContainer<ImageData>	m_ImageCache;
 	CCriticalSection	m_cs;
 	bool	m_bAddImageCached;
 
 	std::wstring	m_currentThumbnailPath;
-	std::vector<std::unique_ptr<CreateImageData>>	m_vecpCreateImageData;
+	MapContainer<CreateImageData>	m_CreateImageData;
 };
 
 

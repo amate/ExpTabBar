@@ -688,26 +688,8 @@ int		CTabCtrlImpl::InsertItem(int nIndex, const CTabItem &item)
 		m_items.insert(m_items.begin() + nIndex, item);
 		m_nActiveIndex = -1;
 	}
-	bool bMulti = false;
-	int nCount = static_cast<int>(m_items.size());
-	for (int i = 0; i < nCount; ++i) {
-		if (i == nIndex)
-			continue;
-		if (m_items[i].m_strItem.CompareNoCase(item.m_strItem) == 0) {
-			auto funcGetLastPath = [this](const CString& path) -> CString {
-				int nSlashPos = path.ReverseFind(L'\\');
-				if (nSlashPos != -1)
-					return path.Left(nSlashPos);
-				return path;
-			};
-			m_items[i].m_strDrawPath.Format(_T("%s | %s"), m_items[i].m_strItem, funcGetLastPath(m_items[i].m_strFullPath));
 
-			if (bMulti == false) {
-				m_items[nIndex].m_strDrawPath.Format(_T("%s | %s"),  m_items[nIndex].m_strItem, funcGetLastPath(m_items[nIndex].m_strFullPath));
-				bMulti = true;
-			}
-		}
-	}
+	SetItemText(nIndex, item.m_strItem);
 
 	_UpdateLayout();
 
@@ -761,20 +743,24 @@ void	CTabCtrlImpl::DeleteItem(int nIndex, bool bMoveNow)
 		if (GetItem(nIndex).m_pTravelLogFore)
 			delete GetItem(nIndex).m_pTravelLogFore;
 
-		int multiCount = 0;
-		int nLastMultiIndex = -1;
+		CString strprevTab = m_items[nIndex].m_strItem;
+		std::vector<CTabItem*> vecprevdupTab;
 		int nCount = static_cast<int>(m_items.size());
 		for (int i = 0; i < nCount; ++i) {
-			if (i == nIndex)
+			if (i == nIndex) {
+				m_items[i].m_strDrawPath.Empty();
+				vecprevdupTab.push_back(&m_items[i]);
 				continue;
-			if (m_items[i].m_strItem.CompareNoCase(m_items[nIndex].m_strItem) == 0) {
-				++multiCount;
-				nLastMultiIndex = i;
+			}
+			if (strprevTab.CompareNoCase(m_items[i].m_strItem) == 0) {
+				vecprevdupTab.push_back(&m_items[i]);
 			}
 		}
 		// 2つある名前被りのうち一つがなくなったのでもう一つも"名前だけ"にする
-		if (multiCount == 1) {
-			m_items[nLastMultiIndex].m_strDrawPath.Empty();
+		if (vecprevdupTab.size() == 2) {
+			for (auto tab : vecprevdupTab) {
+				tab->m_strDrawPath.Empty();
+			}
 		}
 	}
 
@@ -913,46 +899,48 @@ void	CTabCtrlImpl::SetItemText(int nIndex, LPCTSTR strText)
 
 	CString strTab = strText;
 	//strTab = MtlCompactString(strTab, CTabBarConfig::s_nMaxTextLength);
-	if (m_items[nIndex].m_strItem == strTab)
-		return ;
+	//if (m_items[nIndex].m_strItem == strTab)
+	//	return ;
 
-	int multiCount = 0;
-	int nLastMultiIndex = -1;
+	CString strprevTab = m_items[nIndex].m_strItem;
+	std::vector<CTabItem*> vecprevdupTab;
 	int nCount = static_cast<int>(m_items.size());
 	for (int i = 0; i < nCount; ++i) {
-		if (i == nIndex)
+		if (i == nIndex) {
+			m_items[i].m_strDrawPath.Empty();
+			vecprevdupTab.push_back(&m_items[i]);
 			continue;
-		if (m_items[i].m_strItem.CompareNoCase(m_items[nIndex].m_strItem) == 0) {
-			++multiCount;
-			nLastMultiIndex = i;
+		}
+		if (strprevTab.CompareNoCase(m_items[i].m_strItem) == 0) {
+			vecprevdupTab.push_back(&m_items[i]);
 		}
 	}
 	// 2つある名前被りのうち一つがなくなったのでもう一つも"名前だけ"にする
-	if (multiCount == 1) {
-		m_items[nIndex].m_strDrawPath.Empty();
-		m_items[nLastMultiIndex].m_strDrawPath.Empty();
+	if (vecprevdupTab.size() == 2) {
+		for (auto tab : vecprevdupTab) {
+			tab->m_strDrawPath.Empty();
+		}
 	}
 
 	m_items[nIndex].m_strItem = strTab;
 
-	bool bMulti = false;
-	nCount = static_cast<int>(m_items.size());
+	std::vector<CTabItem*> vecdupTabs;
 	for (int i = 0; i < nCount; ++i) {
-		if (i == nIndex)
+		if (i == nIndex) {
+			vecdupTabs.push_back(&m_items[i]);
 			continue;
-		if (m_items[i].m_strItem.CompareNoCase(m_items[nIndex].m_strItem) == 0) {
-			auto funcGetLastPath = [this](const CString& path) -> CString {
-				int nSlashPos = path.ReverseFind(L'\\');
-				if (nSlashPos != -1)
-					return path.Left(nSlashPos);
-				return path;
-			};
-			m_items[i].m_strDrawPath.Format(_T("%s | %s"), m_items[i].m_strItem, funcGetLastPath(m_items[i].m_strFullPath));
-
-			if (bMulti == false) {
-				m_items[nIndex].m_strDrawPath.Format(_T("%s | %s"),  m_items[nIndex].m_strItem, funcGetLastPath(m_items[nIndex].m_strFullPath));
-				bMulti = true;
-			}
+		}
+		if (strTab.CompareNoCase(m_items[i].m_strItem) == 0) {
+			vecdupTabs.push_back(&m_items[i]);
+		}
+	}
+	if (vecdupTabs.size() >= 2) {
+		for (auto tab : vecdupTabs) {
+			CString fullPath = tab->m_strFullPath;
+			::PathRemoveFileSpec(fullPath.GetBuffer(MAX_PATH));
+			fullPath.ReleaseBuffer();
+			CString folderName = ::PathFindFileName(fullPath);
+			tab->m_strDrawPath.Format(_T("%s | %s"), tab->m_strItem, folderName);
 		}
 	}
 
