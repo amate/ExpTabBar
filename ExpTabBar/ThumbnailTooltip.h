@@ -80,6 +80,8 @@ public:
 	CThumbnailTooltip();
 	~CThumbnailTooltip();
 
+	void	SetIsFolderDetailViewFunc(std::function<bool ()> func) { m_funcIsFolderDetailView = func; }
+
 	bool	ShowThumbnailTooltip(std::wstring path, CRect rcItem);
 	void	HideThumbnailTooltip();
 
@@ -124,6 +126,8 @@ private:
 
 	std::wstring	m_currentThumbnailPath;
 	MapContainer<CreateImageData>	m_CreateImageData;
+
+	std::function<bool ()> m_funcIsFolderDetailView;
 };
 
 

@@ -186,6 +186,18 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 			WS_EX_TOOLWINDOW |  WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST);
 		ATLASSERT( m_ThumbnailTooltip.IsWindow() );		
 		SetLayeredWindowAttributes(m_ThumbnailTooltip.m_hWnd, 0, 255, LWA_ALPHA);
+		m_ThumbnailTooltip.SetIsFolderDetailViewFunc([this]() -> bool {
+			CComPtr<IShellView>	spShellView;
+			m_spShellBrowser->QueryActiveShellView(&spShellView);
+			CComQIPtr<IFolderView>	spFolderView = spShellView;
+			UINT viewMode = 0;
+			spFolderView->GetCurrentViewMode(&viewMode);
+			if (viewMode == FVM_ICON) {
+				return false;
+			} else {
+				return true;
+			}
+		});
 
 	} else {
 		DispEventUnadvise(m_spWebBrowser2);
@@ -322,7 +334,7 @@ LRESULT CExpTabBand::OnListViewGetDispInfo(LPNMHDR pnmh)
 	if (m_ListView.m_hWnd) {
 		nIndex = _HitTestListView();
 		if (nIndex != -1)
-			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
+			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_SELECTBOUNDS);
 	} else if (m_wndDirectUI.m_hWnd) {	
 		nIndex = _HitTestDirectUI(rcItem);
 	}
@@ -364,7 +376,7 @@ void	CExpTabBand::OnListViewMouseMove(UINT nFlags, CPoint point)
 
 		if (nIndex != -1 && m_nIndexTooltip != nIndex) {
 			if (bListView) {
-				m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
+				m_ListView.GetItemRect(nIndex, &rcItem, LVIR_SELECTBOUNDS);
 			}
 			if (!_ShowThumbnailTooltip(nIndex, rcItem)) {
 				_HideThumbnailTooltip();
@@ -402,7 +414,7 @@ void	CExpTabBand::OnListViewMouseHover(WPARAM wParam, CPoint ptPos)
 	if (m_ListView.m_hWnd) {
 		nIndex = _HitTestListView();
 		if (nIndex != -1)
-			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
+			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_SELECTBOUNDS);
 	} else if (m_wndDirectUI.m_hWnd) {	
 		nIndex = _HitTestDirectUI(rcItem);
 	}
@@ -415,21 +427,52 @@ void	CExpTabBand::OnListViewMouseHover(WPARAM wParam, CPoint ptPos)
 void	CExpTabBand::OnListViewKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
 //	ATLTRACE(_T("RepCnt : %d\n"), nRepCnt);
-	if (nChar != VK_UP && nChar != VK_DOWN && nChar != VK_LEFT && nChar != VK_RIGHT
-		|| nRepCnt > 1) 
-	{
+
+	if (nRepCnt > 1) {
 		SetMsgHandled(FALSE);
-		return ;
+		return;
+	}
+
+	switch (nChar) {
+	case VK_UP:
+	case VK_DOWN:
+	case VK_LEFT:
+	case VK_RIGHT:
+	case VK_HOME:
+	case VK_END:
+	case VK_PRIOR:
+	case VK_NEXT:
+		break;
+
+	case VK_ESCAPE:
+		SetMsgHandled(FALSE);
+		_HideThumbnailTooltip();
+		return;
+
+	default:
+		SetMsgHandled(FALSE);
+		return;
 	}
 
 	CRect rcItem;
 	int nIndex = -1;
 	bool bListView = m_ListView.m_hWnd != NULL;
 	if (bListView) {
+		int nPrevIndex = m_ListView.GetNextItem(-1, LVNI_SELECTED);
 		m_wndListView.DefWindowProc();
 		nIndex = m_ListView.GetNextItem(-1, LVNI_SELECTED);
-		if (nIndex != -1)
-			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_LABEL);
+		if (nIndex != -1) {
+			if (nPrevIndex == nIndex) {
+				if (nChar == VK_RIGHT)
+					++nIndex;
+				else if (nChar == VK_LEFT)
+					--nIndex;
+				if (0 <= nIndex && nIndex < m_ListView.GetItemCount()) {
+					m_ListView.SelectItem(nIndex);
+				}
+			}
+			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_SELECTBOUNDS);
+		}
 	} else {
 		m_wndDirectUI.DefWindowProc();
 		CComPtr<IShellView>	spShellView;

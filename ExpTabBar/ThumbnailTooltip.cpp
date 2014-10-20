@@ -277,11 +277,22 @@ CRect	CThumbnailTooltip::_CalcTooltipRect(const CRect& rcItem, const ImageData& 
 	int nToolTipHeight = ImageData.ActualSize.cy + kBoundMargin*2 + 1 + kImageTextMargin + ImageData.InfoTipTextSize.cy;
 	CRect rcTooltip(rcItem.BottomRight(), CSize(nToolTipWidth, nToolTipHeight));
 
+	bool bNoIcon = m_funcIsFolderDetailView();
+
 	CRect rcWork = moniInfo.rcWork;
 	// モニターの右端と下端をはみ出てる
 	if (rcWork.right < rcTooltip.right && rcWork.bottom < rcTooltip.bottom) {
-		rcTooltip.MoveToXY(rcItem.left - nToolTipWidth, rcWork.bottom - nToolTipHeight);
-
+		if (bNoIcon) {
+			// 右端の位置をアイテムの幅の3/4分左に移す
+			rcTooltip.MoveToX(rcTooltip.left - static_cast<int>(rcItem.Width() * (3.0 / 4.0)));
+			if (rcWork.right < rcTooltip.right) {
+				rcTooltip.MoveToXY(rcItem.left - nToolTipWidth, rcWork.bottom - nToolTipHeight);
+			} else {
+				rcTooltip.MoveToXY(rcWork.right - nToolTipWidth, rcWork.bottom - nToolTipHeight);
+			}
+		} else {
+			rcTooltip.MoveToXY(rcItem.left - nToolTipWidth, rcWork.bottom - nToolTipHeight);
+		}
 	} else {
 		if (rcWork.right < rcTooltip.right) {	// モニター右をはみ出る
 			rcTooltip.MoveToX(rcWork.right - nToolTipWidth);
