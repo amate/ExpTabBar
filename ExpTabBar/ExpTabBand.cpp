@@ -333,6 +333,9 @@ LRESULT CExpTabBand::OnListViewItemChanged(LPNMHDR pnmh)
 
 LRESULT CExpTabBand::OnListViewGetDispInfo(LPNMHDR pnmh)
 {
+	if (m_bWheelThumbnailView)
+		return 0;
+
 	SetMsgHandled(FALSE);
 
 	CRect rcItem;
