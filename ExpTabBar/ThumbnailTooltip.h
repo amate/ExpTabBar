@@ -10,6 +10,7 @@
 #include <atlsync.h>
 #include <thread>
 #include <vector>
+#include <atomic>
 #include <boost\multi_index_container.hpp>
 #include <boost\multi_index\sequenced_index.hpp>
 #include <boost\multi_index\hashed_index.hpp>
@@ -51,12 +52,11 @@ public:
 	};
 
 	struct CreateImageData {
-		std::thread	createThread;
 		std::wstring path;
 		CRect rcItem;
 
-		CreateImageData(std::thread&& thread, const std::wstring& path, const CRect& rcItem) 
-			: createThread(std::move(thread)), path(path), rcItem(rcItem)
+		CreateImageData(const std::wstring& path, const CRect& rcItem) 
+			: path(path), rcItem(rcItem)
 		{ }
 	};
 
@@ -97,12 +97,14 @@ public:
 		CHAIN_MSG_MAP(CBufferedPaintWindowImpl<CThumbnailTooltip>)
 		CHAIN_MSG_MAP( CThemeImpl<CThumbnailTooltip> )
 		MSG_WM_CREATE( OnCreate )
+		MSG_WM_DESTROY(OnDestroy )
 		MSG_WM_SIZE	( OnSize )
 		MSG_WM_TIMER( OnTimer )
 		MESSAGE_HANDLER_EX(WM_SHOWTHUMBNAILWINDOWFROMTHREAD, OnShowThumbnailWindowFromThread)
 	END_MSG_MAP()
 
 	int OnCreate(LPCREATESTRUCT lpCreateStruct);
+	void OnDestroy();
 	void OnSize(UINT nType, CSize size);
 	void OnTimer(UINT_PTR nIDEvent);
 	LRESULT OnShowThumbnailWindowFromThread(UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -111,6 +113,7 @@ private:
 	CRect	_CalcTooltipRect(const CRect& rcItem, const ImageData& ImageData);
 	CSize	_CalcActualSize(Gdiplus::Image* image);
 	CSize	_CalcInfoTipTextSize(const ImageData& ImageData);
+	void	_StartCreateImageDataThread();
 	std::unique_ptr<ImageData>	_CreateImageData(LPCTSTR strPath);
 	void	_ClearImageCache();
 
@@ -125,9 +128,12 @@ private:
 	bool	m_bAddImageCached;
 
 	std::wstring	m_currentThumbnailPath;
+	std::thread		m_threadCreateImageData;
 	MapContainer<CreateImageData>	m_CreateImageData;
 
 	std::function<bool ()> m_funcIsFolderDetailView;
+
+	std::atomic_bool	m_bAlive;
 };
 
 

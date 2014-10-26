@@ -71,6 +71,8 @@ ALT_MSG_MAP(2)	// SysListView32
 		MSG_WM_MOUSEHOVER( OnListViewMouseHover )
 		MSG_WM_KEYDOWN	 ( OnListViewKeyUp	)
 		MSG_WM_KILLFOCUS ( OnListViewKillFocus )
+		MSG_WM_MOUSEWHEEL( OnListViewMouseWheel )
+		MSG_WM_XBUTTONUP( OnListViewXButtonUp )
 	}
 ALT_MSG_MAP(3)	// DirectUI
 	if (CThumbnailTooltipConfig::s_bUseThumbnailTooltip) {
@@ -80,6 +82,7 @@ ALT_MSG_MAP(3)	// DirectUI
 		MSG_WM_MOUSEHOVER( OnListViewMouseHover )
 		MSG_WM_KEYDOWN	 ( OnListViewKeyUp	)
 		MSG_WM_KILLFOCUS ( OnListViewKillFocus )
+		MSG_WM_MOUSEWHEEL( OnListViewMouseWheel )
 	}
 ALT_MSG_MAP(5)	// TabBar(this)
 	MSG_WM_LBUTTONDBLCLK( OnTabBarLButtonDblClk	)
@@ -125,6 +128,9 @@ public:
 	void	OnListViewMouseHover(WPARAM wParam, CPoint ptPos);
 	void	OnListViewKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags);
 	void	OnListViewKillFocus(CWindow wndFocus);
+	BOOL	OnListViewMouseWheel(UINT nFlags, short zDelta, CPoint pt);
+	void	OnListViewRButtonUp(UINT nFlags, CPoint point);
+	void	OnListViewXButtonUp(int fwButton, int dwKeys, CPoint ptPos);
 
 	void	OnParentNotify(UINT message, UINT nChildID, LPARAM lParam);
 
@@ -184,6 +190,7 @@ private:
 
 	CThumbnailTooltip	m_ThumbnailTooltip;
 	bool	m_bRegisterServer;
+	bool	m_bWheelThumbnailView;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(ExpTabBand), CExpTabBand)

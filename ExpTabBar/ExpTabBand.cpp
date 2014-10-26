@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include "ExpTabBand.h"
 #include <boost/lexical_cast.hpp>
+#include <TlHelp32.h>
 #include "ShellWrap.h"
 #include "GdiplusUtil.h"
 
@@ -17,14 +18,13 @@ CExpTabBand::CExpTabBand() :
 	m_wndAddressBarEditCtrl(this, 8),
 	m_nIndexTooltip(-1),
 	m_bNowTrackMouseLeave(false),
-	m_bNowTrackMouseHover(false)
+	m_bNowTrackMouseHover(false),
+	m_bWheelThumbnailView(false)
 {
-	GdiplusInit();
 }
 
 CExpTabBand::~CExpTabBand()
 {
-	GdiplusTerm();
 }
 
 
@@ -166,6 +166,8 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 			return E_FAIL;
 		}
 
+		GdiplusInit();
+
 		m_wndTabBar.Initialize(punkSite, this);
 
 		/* タブバー作成 */
@@ -224,8 +226,12 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		m_wndTabBar.DestroyWindow();
 		m_wndTabBar.UnInitialize();
 
+		GdiplusTerm();
+
 		m_spShellBrowser.Release();
 		m_spWebBrowser2.Release();
+
+		_RegisterExecuteCommandVerb(false);
 	}
 
 	return S_OK;
@@ -351,6 +357,8 @@ LRESULT CExpTabBand::OnListViewGetDispInfo(LPNMHDR pnmh)
 void	CExpTabBand::OnListViewMouseMove(UINT nFlags, CPoint point)
 {
 	SetMsgHandled(FALSE);
+	if (m_bWheelThumbnailView)
+		return;
 
 	bool bListView = m_ListView.m_hWnd != NULL;
 	if (m_bNowTrackMouseLeave == false)
@@ -499,6 +507,66 @@ void	CExpTabBand::OnListViewKillFocus(CWindow wndFocus)
 	_HideThumbnailTooltip();
 }
 
+BOOL	CExpTabBand::OnListViewMouseWheel(UINT nFlags, short zDelta, CPoint pt)
+{
+	if (nFlags == MK_XBUTTON1) {
+		int nIndex = -1;
+		int nItemCount = 0;
+		bool bListView = m_ListView.m_hWnd != NULL;
+		if (bListView) {
+			nIndex = m_ListView.GetNextItem(-1, LVNI_SELECTED);
+			nItemCount = m_ListView.GetItemCount();
+		} else {
+			CComPtr<IShellView>	spShellView;
+			m_spShellBrowser->QueryActiveShellView(&spShellView);
+			CComQIPtr<IFolderView>	spFolderView = spShellView;
+			spFolderView->GetFocusedItem(&nIndex);
+			spFolderView->ItemCount(SVGIO_ALLVIEW, &nItemCount);
+		}
+		if (nIndex == -1) {
+			SetMsgHandled(FALSE);
+			return 0;
+		}
+
+		CRect rcItem;
+		int nNextIndex = zDelta > 0 ? nIndex - 1 : nIndex + 1;
+		if (nNextIndex == -1 || nNextIndex == nItemCount) {
+			SetMsgHandled(FALSE);
+			return 0;
+		}
+		
+		if (bListView) {
+			m_ListView.SelectItem(nNextIndex);
+			m_ListView.GetItemRect(nIndex, &rcItem, LVIR_SELECTBOUNDS);
+		} else {
+			CComPtr<IShellView>	spShellView;
+			m_spShellBrowser->QueryActiveShellView(&spShellView);
+			CComQIPtr<IFolderView>	spFolderView = spShellView;
+			spFolderView->SelectItem(nNextIndex, SVSI_FOCUSED | SVSI_ENSUREVISIBLE);
+			rcItem = _GetItemRect(nIndex);
+		}
+		m_bWheelThumbnailView = true;
+		::GetCursorPos(&m_ptLastForMouseMove);
+		if (!_ShowThumbnailTooltip(nNextIndex, rcItem)) {
+			_HideThumbnailTooltip();
+		}
+	} else {
+		SetMsgHandled(FALSE);
+	}
+	return 0;
+}
+
+void	CExpTabBand::OnListViewXButtonUp(int fwButton, int dwKeys, CPoint ptPos)
+{
+	if (fwButton == XBUTTON1) {
+		if (m_bWheelThumbnailView) {
+			m_bWheelThumbnailView = false;
+			return;
+		}
+	}
+	SetMsgHandled(FALSE);
+}
+
 
 /// フォルダーをミドルクリックで新しいタブで開く
 void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
@@ -579,14 +647,14 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 			::ILFree(pidlFolder);
 
 			m_ThumbnailTooltip.LockImageCache();
-			std::thread	td([this, vec]() {
+			//std::thread	td([this, vec]() {
 				for (auto it = vec.begin(); it != vec.end(); ++it) {
 					if (::GetAsyncKeyState(VK_ESCAPE) < 0)
 						break;
 					m_ThumbnailTooltip.AddThumbnailCache((LPCTSTR)*it);
 				}
-			});
-			td.detach();
+			//});
+			//td.detach();
 		}
 	} else if(::GetKeyState(VK_SHIFT) < 0) {
 		m_ThumbnailTooltip.ClearImageCache();
@@ -616,6 +684,9 @@ void	CExpTabBand::OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOt
 {
 	SetMsgHandled(FALSE);
 
+	if (nState == WA_INACTIVE)
+		_HideThumbnailTooltip();
+
 	_RegisterExecuteCommandVerb(!(nState != WA_INACTIVE));
 }
 
@@ -624,18 +695,19 @@ void	CExpTabBand::OnExplorerDestroy()
 {
 	SetMsgHandled(FALSE);
 
-	//HWND hWndTarget = FindWindow(_T("ExpTabBar_NotifyWindow"), NULL);
-	//if (hWndTarget == NULL) {
-	//	std::thread([]{
-	//		::Sleep(5 * 1000);
+	OSVERSIONINFO	osvi = { sizeof(osvi) };
+	GetVersionEx(&osvi);
+	if (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) {	// Win7
+		std::thread([]{
+			::Sleep(5 * 1000);
 
-	//		DWORD processID = GetCurrentProcessId();
-	//		HANDLE h = ::OpenProcess(PROCESS_TERMINATE, FALSE, processID);
-	//		ATLASSERT(h);
-	//		::TerminateProcess(h, 0);
-	//		::CloseHandle(h);
-	//	}).detach();
-	//}
+			DWORD processID = GetCurrentProcessId();
+			HANDLE h = ::OpenProcess(PROCESS_TERMINATE, FALSE, processID);
+			ATLASSERT(h);
+			::TerminateProcess(h, 0);
+			::CloseHandle(h);
+		}).detach();
+	}
 }
 
 void	CExpTabBand::OnAddressBarProgressParentNotify(UINT message, UINT nChildID, LPARAM lParam)

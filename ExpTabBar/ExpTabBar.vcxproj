@@ -296,6 +296,7 @@
     </ClCompile>
     <ClCompile Include="GdiplusUtil.cpp" />
     <ClCompile Include="IniFile.cpp" />
+    <ClCompile Include="Logger.cpp" />
     <ClCompile Include="Misc.cpp" />
     <ClCompile Include="ShellWrap.cpp" />
     <ClCompile Include="stdafx.cpp">
@@ -320,6 +321,7 @@
     <ClInclude Include="GdiplusUtil.h" />
     <ClInclude Include="HlinkDataObject.h" />
     <ClInclude Include="IniFile.h" />
+    <ClInclude Include="Logger.h" />
     <ClInclude Include="Misc.h" />
     <ClInclude Include="MtlDragDrop.h" />
     <ClInclude Include="OleDragDropTabCtrl.h" />

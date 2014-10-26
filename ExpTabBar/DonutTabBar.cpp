@@ -1563,12 +1563,19 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 
 			::PostMessage(GetTopLevelWindow(), WM_CLOSE, 0, 0);
 
-			//DWORD	dwProcessID = 0;
-			//GetWindowThreadProcessId(GetTopLevelWindow(), &dwProcessID);
-			//ATLASSERT(dwProcessID == 0);
-			//HANDLE h = ::OpenProcess(PROCESS_TERMINATE, FALSE, dwProcessID);
-			//ATLASSERT(h == NULL);
-			//::TerminateProcess(GetCurrentProcess(), 0);
+			OSVERSIONINFO	osvi = { sizeof(osvi) };
+			GetVersionEx(&osvi);
+			if (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) {	// Win7
+				std::thread([]{
+					::Sleep(5 * 1000);
+
+					DWORD processID = GetCurrentProcessId();
+					HANDLE h = ::OpenProcess(PROCESS_TERMINATE, FALSE, processID);
+					ATLASSERT(h);
+					::TerminateProcess(h, 0);
+					::CloseHandle(h);
+				}).detach();
+			}
 			return;
 		} else {	// 他のエクスプローラーはない
 
