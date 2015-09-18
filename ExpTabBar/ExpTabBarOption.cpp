@@ -113,7 +113,7 @@ void	CTabBarConfig::SaveConfig()
 	pt.put("Tab.AddressBarNewTabOpen", s_bAddressBarNewTabOpen);
 	pt.put("Tab.AlwaysShowColumHeaders", s_bAlwaysShowColumHeaders);
 
-	std::ofstream iniostream(g_szIniFileName, std::ios::out | std::ios::trunc);
+	std::ofstream iniostream(g_szIniFileName);
 	write_ini(iniostream, pt);
 	iniostream.close();
 }
@@ -277,7 +277,7 @@ void CThumbnailTooltipConfig::SaveConfig()
 	pt.put("Thumbtip.MaxPreCache", s_nMaxPreCache);
 	pt.put("Thumbtip.ShowThumbnailOnAlt"	, s_bShowThumbnailOnAlt);
 
-	std::ofstream iniostream(g_szIniFileName, std::ios::out | std::ios::trunc);
+	std::ofstream iniostream(g_szIniFileName);
 	write_ini(iniostream, pt);
 	iniostream.close();
 }
@@ -390,7 +390,7 @@ void	CFavoritesOption::LoadConfig()
 	s_vecFavoritesItem.reserve(20);
 
 	wptree	pt;
-	std::wifstream 	configstream(FavoritesConfigPath, std::ios::in);
+	std::wifstream 	configstream(FavoritesConfigPath, std::ios::in | std::ios::binary);
 	if (!configstream)
 		return ;
 	configstream.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>));
@@ -441,8 +441,9 @@ void	CFavoritesOption::SaveConfig()
 	}
 	pt.add_child(L"Favorites", ptChild);
 
+	CString tempFavoritesConfigPath = Misc::GetExeDirectory() + _T("Favorites.temp.xml");
 	CString FavoritesConfigPath = Misc::GetExeDirectory() + _T("Favorites.xml");
-	std::wofstream 	ostream(FavoritesConfigPath, std::ios::out | std::ios::trunc);
+	std::wofstream 	ostream(tempFavoritesConfigPath);
 	if (!ostream) {
 		MessageBox(NULL, _T("Favorites.xmlÇÃÉIÅ[ÉvÉìÇ…é∏îs"), NULL, MB_ICONERROR);
 		return ;
@@ -451,6 +452,8 @@ void	CFavoritesOption::SaveConfig()
 	ostream.imbue(std::locale(std::locale(), new std::codecvt_utf8_utf16<wchar_t>));
 	write_xml(ostream, pt, xml_writer_make_settings<std::wstring>(L' ', 2, xml_parser::widen<std::wstring>("utf-8")));
 
+	ostream.close();
+	ATLVERIFY(::MoveFileEx(tempFavoritesConfigPath, FavoritesConfigPath, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH));
 }
 
 //////////////////////////////////////////////

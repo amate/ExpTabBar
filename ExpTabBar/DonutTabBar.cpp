@@ -1820,8 +1820,6 @@ void	CDonutTabBar::OnDestroy()
 
 	m_tipHistroy.DestroyWindow();
 
-	CFavoritesOption::CleanFavoritesItem();
-
 	m_menuPopup.DestroyMenu();
 
 	KillTimer(AutoSaveTimerID);
@@ -1905,6 +1903,8 @@ void	CDonutTabBar::OnMenuSelect(UINT nItemID, UINT nFlags, CMenuHandle menu)
 	if ((HMENU)menu == (HMENU)m_menuHistory) {
 		if (nFlags & MF_MOUSESELECT) {
 			int i = nItemID - ID_RECENTCLOSED_FIRST;
+			if (i < 0)
+				return;
 			m_tipHistroy.UpdateTipText(m_vecHistoryItem[i].strFullPath.GetBuffer(), m_hWnd);
 
 			/* ƒgƒ‰ƒbƒN‚µ‚È‚¢ */
@@ -1919,6 +1919,8 @@ void	CDonutTabBar::OnMenuSelect(UINT nItemID, UINT nFlags, CMenuHandle menu)
 	} else if (menu.m_hMenu == m_menuFavorites.m_hMenu) {
 		if (nFlags & MF_MOUSESELECT) {
 			int i = nItemID - ID_FAVORITES_FIRST;
+			if (i < 0)
+				return ;
 			const CString& strPath = CFavoritesOption::s_vecFavoritesItem[i].strPath;
 			if (strPath == FAVORITESSEPSTRING)
 				return ;

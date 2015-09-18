@@ -154,7 +154,6 @@ private:
 	void	_TrackMouseLeave(HWND hWnd);
 	void	_TrackMouseHover(HWND hWnd);
 	void	_SetNoFullRowSelect();
-	void	_Register_openInTabLocalServer(bool bRegister);
 	void	_RegisterExecuteCommandVerb(bool bRegister);
 	bool	_SubclassAddressBarProgress();
 	bool	_SubclassAddressBarEditCtrl();

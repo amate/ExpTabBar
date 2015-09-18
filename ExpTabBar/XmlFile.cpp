@@ -120,15 +120,22 @@ CXmlFileWrite::CXmlFileWrite(const CString &FilePath)
 // デストラクタ
 CXmlFileWrite::~CXmlFileWrite()
 {
-	// 開いているタグを閉じる
-    if (FAILED(m_pWriter->WriteEndDocument())){
-        throw _T("WriteEndDocument失敗");
-    }
+	try {
+		// 開いているタグを閉じる
+		if (FAILED(m_pWriter->WriteEndDocument())) {
+			throw _T("WriteEndDocument失敗");
+		}
 
-	// ファイルに書き込む
-    if (FAILED(m_pWriter->Flush())){
-        throw _T("Flush失敗");
-    }
+		// ファイルに書き込む
+		if (FAILED(m_pWriter->Flush())) {
+			throw _T("Flush失敗");
+		}
+	}
+	catch (LPCTSTR err) {
+		ATLTRACE(err);
+		err;
+		ATLASSERT(FALSE);
+	}
 }
 
 
