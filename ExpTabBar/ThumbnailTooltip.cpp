@@ -53,11 +53,6 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		m_TimerID = 0;
 	}
 
-	// Altキーを押しているときだけサムネイルを表示する
-	if (CThumbnailTooltipConfig::s_bShowThumbnailOnAlt && (GetKeyState(VK_MENU) < 0) == false) {
-		return false;
-	}
-
 	m_currentThumbnailPath = path;
 
 	CCritSecLock	lock(m_cs);
@@ -79,7 +74,7 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		MoveWindow(&rcTooltip, FALSE);
 
 		if (m_pNowImageData->bGifAnimation) {
-			m_TimerID = SetTimer(1, m_pNowImageData->vecDelayTime[0]);
+			m_TimerID = SetTimer(kGifTimerId, m_pNowImageData->vecDelayTime[0]);
 		}
 
 		/// windows7のツールチップのように丸みをつける
@@ -90,6 +85,10 @@ bool	CThumbnailTooltip::ShowThumbnailTooltip(std::wstring path, CRect rcItem)
 		Invalidate(FALSE);
 		UpdateWindow();
 		//SetLayeredWindowAttributes(m_hWnd, 0, 255, LWA_ALPHA);
+
+		// メモリ解放タイマーをセット
+		SetTimer(kMemFreeTimerId, kMemFreeTimerInterval);
+
 		return true;
 	}
 	return false;
@@ -126,7 +125,6 @@ void	CThumbnailTooltip::HideThumbnailTooltip()
 		KillTimer(m_TimerID);
 		m_TimerID = 0;
 	}
-
 	m_pNowImageData = nullptr;
 }
 
@@ -287,12 +285,18 @@ void CThumbnailTooltip::OnSize(UINT nType, CSize size)
 
 void CThumbnailTooltip::OnTimer(UINT_PTR nIDEvent)
 {
-	if (nIDEvent == 1 && m_pNowImageData) {
+	if (nIDEvent == kGifTimerId && m_pNowImageData) {
 		++m_nFramePosition;
 		if (m_nFramePosition == m_pNowImageData->nFrameCount)
 			m_nFramePosition = 0;
 		m_TimerID = SetTimer(1, m_pNowImageData->vecDelayTime[m_nFramePosition]);
 		Invalidate(FALSE);
+
+	} else if (nIDEvent == kMemFreeTimerId) {
+		if (IsShowThumbnailTooltip() == false) {
+			ClearImageCache();
+			KillTimer(kMemFreeTimerId);
+		}
 	}
 }
 

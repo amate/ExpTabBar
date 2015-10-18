@@ -6,6 +6,26 @@
 #include <TlHelp32.h>
 #include "ShellWrap.h"
 #include "GdiplusUtil.h"
+#include "Logger.h"
+
+namespace {
+
+
+	bool	IsImageFile(const CString& path)
+	{
+		if (::PathIsDirectory(path))
+			return false;
+
+		CString strExt = Misc::GetPathExtention(path);
+		strExt.MakeLower();
+		if (strExt == _T("jpg") || strExt == _T("jpeg") || strExt == _T("png") || strExt == _T("gif") || strExt == _T("bmp")) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+}	// namespace
 
 // コンストラクタ/デストラクタ
 CExpTabBand::CExpTabBand() : 
@@ -127,26 +147,24 @@ STDMETHODIMP CExpTabBand::ResizeBorderDW(const RECT* /* prcBorder */, IUnknown* 
 
 STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 {
+	//INFO_LOG << L"CExpTabBand::SetSite : punkSite : " << punkSite;
 	HRESULT hr;
 	if (punkSite) {
 		//Get the parent window.
 		CComQIPtr<IOleWindow> pOleWindow(punkSite);
-		if (pOleWindow == nullptr)
+		if (pOleWindow == nullptr) {
+			//ERROR_LOG << L"CExpTabBand::SetSite : pOleWindow faild";
 			return E_FAIL;
+		}
 
 		HWND	hWndParent;
 		pOleWindow->GetWindow(&hWndParent);
 		if (hWndParent == NULL) {
+			ERROR_LOG << L"CExpTabBand::SetSite : pOleWindow->GetWindow failed";
 			ATLASSERT(FALSE);
 			return E_FAIL;
 		}
 
-		m_wndExplorer.SubclassWindow(CWindow(hWndParent).GetTopLevelWindow());
-		if (m_wndExplorer == ::GetFocus() || m_wndExplorer.IsChild(::GetFocus()))
-			_RegisterExecuteCommandVerb(false);
-
-		_SubclassAddressBarProgress();
-		
 		CComQIPtr<IServiceProvider> pSP(punkSite);
 		ATLASSERT(pSP);
 		hr = pSP->QueryService(IID_IWebBrowserApp, IID_IWebBrowser2, (LPVOID*)&m_spWebBrowser2);
@@ -154,6 +172,7 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		if (SUCCEEDED(hr)) {
 			hr = DispEventAdvise(m_spWebBrowser2);
 			if (FAILED(hr)) {
+				ERROR_LOG << L"CExpTabBand::SetSite : DispEventAdvise(m_spWebBrowser2) failed";
 				ATLASSERT(FALSE);
 				return E_FAIL;
 			}
@@ -163,6 +182,7 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		ATLASSERT(m_spShellBrowser);
 		if (m_spShellBrowser == nullptr) {
 			ATLASSERT(FALSE);
+			ERROR_LOG << L"CExpTabBand::SetSite : m_spShellBrowser failed";
 			return E_FAIL;
 		}
 
@@ -174,6 +194,7 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		m_wndTabBar.Create(hWndParent);
 		if (m_wndTabBar.IsWindow() == FALSE) {
 			ATLASSERT(FALSE);
+			ERROR_LOG << L"CExpTabBand::SetSite : m_wndTabBar.Create(hWndParent) failed";
 			return E_FAIL;
 		}
 
@@ -200,6 +221,12 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 				return true;
 			}
 		});
+
+		m_wndExplorer.SubclassWindow(CWindow(hWndParent).GetTopLevelWindow());
+		if (m_wndExplorer == ::GetFocus() || m_wndExplorer.IsChild(::GetFocus()))
+			_RegisterExecuteCommandVerb(false);
+
+		_SubclassAddressBarProgress();
 
 	} else {
 		DispEventUnadvise(m_spWebBrowser2);
@@ -257,6 +284,11 @@ void CExpTabBand::OnNavigateComplete2(IDispatch* pDisp,VARIANT* URL)
 
 void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
 {
+	if (m_spShellBrowser == nullptr) {
+		ATLASSERT(FALSE);
+		return;
+	}
+
 	if (m_bNavigateCompleted == true) {
 		m_wndTabBar.DocumentComplete();
 		m_bNavigateCompleted = false;
@@ -550,7 +582,7 @@ BOOL	CExpTabBand::OnListViewMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 		}
 		m_bWheelThumbnailView = true;
 		::GetCursorPos(&m_ptLastForMouseMove);
-		if (!_ShowThumbnailTooltip(nNextIndex, rcItem)) {
+		if (!_ShowThumbnailTooltip(nNextIndex, rcItem, true)) {
 			_HideThumbnailTooltip();
 		}
 	} else {
@@ -576,8 +608,12 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 {
 	if (message == WM_MBUTTONDOWN) {
 		int nIndex = _HitTestListView();
-		if (nIndex == -1)
-			return ;
+		if (nIndex == -1) {
+			if (m_ThumbnailTooltip.IsShowThumbnailTooltip()) {
+				_HideThumbnailTooltip();
+			}
+			return;
+		}
 
 		CComPtr<IShellView>	spShellView;
 		HRESULT hr = m_spShellBrowser->QueryActiveShellView(&spShellView);
@@ -602,7 +638,21 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 				::ILFree(pidlSelectedItem);
 				pidlSelectedItem = nullptr;
 			}
+		} else {
+			if (m_ThumbnailTooltip.IsShowThumbnailTooltip() == false && IsImageFile(strFullPath)) {
+				CRect rcItem;
+				if (m_ListView.m_hWnd) {
+					m_ListView.GetItemRect(nIndex, &rcItem, LVIR_SELECTBOUNDS);
+				} else if (m_wndDirectUI.m_hWnd) {
+					ATLVERIFY(_HitTestDirectUI(rcItem) == nIndex);
+				}
+				_ShowThumbnailTooltip(nIndex, rcItem, true);
+			} else {
+				_HideThumbnailTooltip();
+			}
 		}
+
+
 		if (pidlSelectedItem) {
 			if (IsExistFolderFromIDList(pidlSelectedItem)) {
 				m_wndTabBar.OnTabCreate(pidlSelectedItem, false, false, true);
@@ -867,7 +917,7 @@ CRect	CExpTabBand::_GetItemRect(int nIndex)
 	return rcItem;
 }
 
-bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem)
+bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem, bool bForceShow /*= false*/)
 {
 	//SetLayeredWindowAttributes(m_pThumbnailTooltip->m_hWnd, 0, 255, LWA_ALPHA);
 	//m_pThumbnailTooltip->ShowWindow(TRUE);
@@ -876,22 +926,14 @@ bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem)
 	if (pidl == nullptr)
 		return false;
 
-	auto funcIsImageFile = [](const CString& path) -> bool {
-		if (::PathIsDirectory(path))
-			return false;
-
-		CString strExt = Misc::GetPathExtention(path);
-		strExt.MakeLower();
-		if (strExt == _T("jpg") || strExt == _T("jpeg") || strExt == _T("png") || strExt == _T("gif") || strExt == _T("bmp")) {
-			return true;
-		} else {
-			return false;
-		}
-	};
+	// Altキーを押しているときだけサムネイルを表示する
+	if (bForceShow == false && CThumbnailTooltipConfig::s_bShowThumbnailOnAlt && (GetKeyState(VK_MENU) < 0) == false) {
+		return false;
+	}
 
 	CString path = ShellWrap::GetFullPathFromIDList(pidl);
 	::ILFree(pidl);
-	if (funcIsImageFile(path)) {
+	if (IsImageFile(path)) {
 		m_nIndexTooltip = nIndex;
 		m_wndShellView.ClientToScreen(&rcItem);
 		bool bShow = m_ThumbnailTooltip.ShowThumbnailTooltip((LPCWSTR)path, rcItem);
@@ -912,7 +954,7 @@ bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem)
 
 						CString path = ShellWrap::GetFullPathFromIDList(pidl);
 						::ILFree(pidl);
-						if (funcIsImageFile(path))
+						if (IsImageFile(path))
 							m_ThumbnailTooltip.AddThumbnailCache((LPCWSTR)path);
 					}
 				};

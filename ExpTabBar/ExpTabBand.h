@@ -149,7 +149,7 @@ private:
 	int		_HitTestListView(const CPoint& pt);
 	int		_HitTestListView();
 	CRect	_GetItemRect(int nIndex);
-	bool	_ShowThumbnailTooltip(int nIndex, CRect rcItem);
+	bool	_ShowThumbnailTooltip(int nIndex, CRect rcItem, bool bForceShow = false);
 	void	_HideThumbnailTooltip();
 	void	_TrackMouseLeave(HWND hWnd);
 	void	_TrackMouseHover(HWND hWnd);

@@ -1,0 +1,14 @@
+﻿# gitで無視するファイル/フォルダ
+*.ncb
+*.sdf
+*.suo
+*.opensdf
+
+_*/
+ipch/
+_ignore*/
+
+*Debug*
+Release*
+
+

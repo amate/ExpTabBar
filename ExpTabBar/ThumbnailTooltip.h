@@ -75,6 +75,10 @@ public:
 
 	enum {
 		WM_SHOWTHUMBNAILWINDOWFROMTHREAD = WM_APP + 100,
+
+		kGifTimerId = 1,
+		kMemFreeTimerId = 2,
+		kMemFreeTimerInterval = 10 * 60 * 1000,	// 10•ª
 	};
 
 	CThumbnailTooltip();
@@ -84,6 +88,7 @@ public:
 
 	bool	ShowThumbnailTooltip(std::wstring path, CRect rcItem);
 	void	HideThumbnailTooltip();
+	bool	IsShowThumbnailTooltip() { return IsWindowVisible() != 0; }
 
 	void	LockImageCache() { m_bAddImageCached = true; }
 	void	AddThumbnailCache(std::wstring path, CRect rcItem = CRect());

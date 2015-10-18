@@ -12,7 +12,7 @@
 #include "IniFile.h"
 #include "XmlFile.h"
 #include "ExpTabBarOption.h"
-
+#include "Logger.h"
 
 ////////////////////////////////////////////////////////////
 // CNotifyWindow
@@ -22,17 +22,124 @@ CNotifyWindow::CNotifyWindow(CDonutTabBar* p)
 	: m_pTabBar(p)
 {	}
 
+int CNotifyWindow::OnCreate(LPCREATESTRUCT lpCreateStruct)
+{
+#if 1
+	LPCWSTR kJobName = L"ExpTabBar_Job";
+	m_hJob = ::CreateJobObject(nullptr, kJobName);
+	ATLASSERT(m_hJob);
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION extendedLimit = {};
+	extendedLimit.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+	SetInformationJobObject(m_hJob, JobObjectExtendedLimitInformation, &extendedLimit, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+
+	auto funcStartProcess = [](const CString& exePath, HANDLE hEvent) {
+		if (::PathFileExists(exePath) == FALSE)
+			return;
+
+		STARTUPINFO startUpInfo = { sizeof(STARTUPINFO) };
+		PROCESS_INFORMATION processInfo = {};
+		SECURITY_ATTRIBUTES securityAttributes = { sizeof(SECURITY_ATTRIBUTES) };
+		securityAttributes.bInheritHandle = TRUE;
+		std::wstring cmdLine = std::to_wstring((uint64_t)hEvent);
+		BOOL bRet = ::CreateProcess(exePath, (LPWSTR)cmdLine.data(),
+			nullptr, nullptr, TRUE, 0, nullptr, nullptr, &startUpInfo, &processInfo);
+		ATLASSERT(bRet);
+		::CloseHandle(processInfo.hThread);
+		::CloseHandle(processInfo.hProcess);
+	};
+
+	SECURITY_ATTRIBUTES securityAttributes = { sizeof(SECURITY_ATTRIBUTES) };
+	securityAttributes.bInheritHandle = TRUE;
+	m_hEventAPIHookTrapper = ::CreateEvent(&securityAttributes, TRUE, FALSE, NULL);
+	ATLASSERT(m_hEventAPIHookTrapper);
+	funcStartProcess(Misc::GetExeDirectory() + L"APIHookTrapper.exe", m_hEventAPIHookTrapper);
+
+#ifdef _WIN64
+	m_hEventAPIHookTrapper64 = ::CreateEvent(&securityAttributes, TRUE, FALSE, NULL);
+	ATLASSERT(m_hEventAPIHookTrapper64);
+	funcStartProcess(Misc::GetExeDirectory() + L"APIHookTrapper64.exe", m_hEventAPIHookTrapper64);
+#endif
+#endif
+	return 0;
+}
+
+void CNotifyWindow::OnDestroy()
+{
+#if 1
+	::SetEvent(m_hEventAPIHookTrapper);
+	::CloseHandle(m_hEventAPIHookTrapper);
+
+#ifdef _WIN64
+	::SetEvent(m_hEventAPIHookTrapper64);
+	::CloseHandle(m_hEventAPIHookTrapper64);
+#endif
+
+	::CloseHandle(m_hJob);
+#endif
+}
+
 /// 外部からタブを開く
 BOOL CNotifyWindow::OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct)
 {
 #if 0
 	LPCTSTR strFullPath = (LPCTSTR)pCopyDataStruct->lpData;
 #endif
-	LPITEMIDLIST pidl = (LPITEMIDLIST)pCopyDataStruct->lpData;
-	if (pidl == NULL)
-		return FALSE;
+	if (pCopyDataStruct->dwData == 0) {
+		LPITEMIDLIST pidl = (LPITEMIDLIST)pCopyDataStruct->lpData;
+		if (pidl == NULL)
+			return FALSE;
 
-	m_pTabBar->ExternalOpen(::ILClone(pidl));
+		CString folderPath = GetFullPathFromIDList(pidl);
+		INFO_LOG << L"ExternalOpen 0: " << (LPCWSTR)folderPath;
+
+		m_pTabBar->ExternalOpen(::ILClone(pidl));
+
+	} else if (pCopyDataStruct->dwData == 1) {
+		std::string serializedData((const char*)pCopyDataStruct->lpData, pCopyDataStruct->cbData);
+		OpenFolderAndSelectItems folderAndSelectItems;
+		folderAndSelectItems.Deserialize(serializedData);
+
+#if 0
+		// 子がフルパスになっていたら、子だけにする
+		for (UINT i = 0; i < folderAndSelectItems.cidl; ++i) {
+			LPITEMIDLIST pidl = (LPITEMIDLIST)folderAndSelectItems.apidl[i].data();
+			bool isChild = ILIsChild(pidl) != 0;
+			if (isChild == false) {
+				PITEMID_CHILD childpidl = ::ILFindLastID(pidl);
+				if (childpidl == nullptr) {
+					ATLASSERT(FALSE);
+				} else {
+					std::string childItem((const char*)childpidl, ::ILGetSize(childpidl));
+					folderAndSelectItems.apidl[i] = childItem;
+				}
+			}
+		}
+#endif
+		// pidlFolderがフォルダでなければ、分けて入れる
+		LPCITEMIDLIST pidl = (LPCITEMIDLIST)folderAndSelectItems.pidlFolder.data();
+		if (IsExistFolderFromIDList(pidl) == false) {
+			ATLASSERT(folderAndSelectItems.cidl == 0);
+			PITEMID_CHILD childpidl = ::ILFindLastID(pidl);
+			if (childpidl == nullptr) {
+				ATLASSERT(FALSE);
+			} else {
+				std::string childItem((const char*)childpidl, ::ILGetSize(childpidl));
+				folderAndSelectItems.apidl.emplace_back(childItem);
+				++folderAndSelectItems.cidl;
+
+				LPITEMIDLIST pidlClone = ::ILClone(pidl);
+				::ILRemoveLastID(pidlClone);
+				std::string folderpidl((const char*)pidlClone, ::ILGetSize(pidlClone));
+				folderAndSelectItems.pidlFolder = folderpidl;
+				::ILFree(pidlClone);
+			}
+		}
+
+		CString folderPath = GetFullPathFromIDList((LPCITEMIDLIST)folderAndSelectItems.pidlFolder.data());
+		INFO_LOG << L"ExternalOpen 1: " << (LPCWSTR)folderPath << L" cidl : " << folderAndSelectItems.cidl << L" dwFlags : " << folderAndSelectItems.dwFlags;
+
+		m_pTabBar->ExternalOpen(::ILClone((LPCITEMIDLIST)folderAndSelectItems.pidlFolder.data()), folderAndSelectItems);
+	}
 	return TRUE;
 }
 
@@ -1125,17 +1232,41 @@ void	CDonutTabBar::NavigateLockTab(int nIndex, bool bOn)
 }
 
 
-void	CDonutTabBar::ExternalOpen(LPITEMIDLIST pidl)
+void	CDonutTabBar::ExternalOpen(LPITEMIDLIST pidl, 
+	boost::optional<OpenFolderAndSelectItems> folderAndSelectItems /*= boost::none*/)
 {
 	Misc::SetForegroundWindow(GetTopLevelWindow());
+	std::thread([this]() { 
+		::Sleep(50); 
+		Misc::SetForegroundWindow(GetTopLevelWindow()); 
+	}).detach();
+
 	int nIndex = _IDListIsEqualIndex(pidl);
 	if (nIndex != -1) {					
 		if (nIndex != GetCurSel()) {		/* すでに開いてるタブがあればそっちに移動する */
 			_SaveSelectedIndex(GetCurSel());
 			SetCurSel(nIndex);
+			m_folderAndSelectItems = folderAndSelectItems;
+
+		} else {	// すでにアクティブなタブに開かれている
+			if (folderAndSelectItems) {
+				if (m_bTabChanged) {
+					m_folderAndSelectItems = folderAndSelectItems;
+					INFO_LOG << L"ExternalOpen CurSelOpen tabchanged : true";
+
+				} else {
+					auto spFolderAndSelectItems = std::make_shared<OpenFolderAndSelectItems>(*folderAndSelectItems);
+					std::thread([spFolderAndSelectItems]() {
+						spFolderAndSelectItems->DoOpenFolderAndSelectItems();
+					}).detach();
+				}
+			}
 		}
+		::ILFree(pidl);
+
 	} else {
 		SetCurSel(OnTabCreate(pidl));
+		m_folderAndSelectItems = folderAndSelectItems;
 	}
 }
 
@@ -1750,8 +1881,14 @@ void	CDonutTabBar::DocumentComplete()
 				}
 			}
 		}
-
-
+		
+		if (m_folderAndSelectItems) {
+			int nIndex = _IDListIsEqualIndex((LPITEMIDLIST)m_folderAndSelectItems->pidlFolder.data());
+			if (nIndex == GetCurSel()) {
+				m_folderAndSelectItems->DoOpenFolderAndSelectItems();
+			}
+			m_folderAndSelectItems.reset();
+		}
 	}
 #endif
 }
