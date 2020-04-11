@@ -192,7 +192,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\minhook\build\VC14\libMinHook.vcxproj">
+    <ProjectReference Include="..\minhook\build\VC15\libMinHook.vcxproj">
       <Project>{f142a341-5ee0-442d-a15f-98ae9b48dbae}</Project>
     </ProjectReference>
   </ItemGroup>
