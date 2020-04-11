@@ -1,0 +1,6 @@
+﻿# gitで無視するファイル/フォルダ
+
+/*
+!/images
+
+!.gitignore
