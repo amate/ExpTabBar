@@ -192,7 +192,7 @@ void	CTabCtrlImpl::_ShowOrHideUpDownCtrl(const CRect &rcClient)
 		m_wndDropBtn.ShowWindow(SW_SHOWNORMAL);
 		m_wndUpDown.ShowWindow(SW_SHOWNORMAL);
 		return;
-	} else if (m_items[nCount - 1].m_rcItem.right > rcClient.right) {
+	} else if (m_items[static_cast<size_t>(nCount - 1)].m_rcItem.right > rcClient.right) {
 		m_wndDropBtn.ShowWindow(SW_SHOWNORMAL);
 		m_wndUpDown.ShowWindow(SW_SHOWNORMAL);
 		return;
@@ -341,39 +341,42 @@ void	CTabCtrlImpl::_UpdateMultiLineLayout(int nWidth)
 			cxOffset = s_kSideMargin;
 
 		enum { kcxIcon = 16, s_kcxIconGap = 5, kMuitlDrawPadding = 10 };
+		CSize areaSize;
 		if (item.m_strDrawPath.GetLength() > 0) {
-			CRect rcItem(0, 0, MtlComputeWidthOfText(item.m_strDrawPath, m_pTabSkin->GetFontHandle()), CTabBarConfig::s_FixedSize.cy);
-			rcItem.right += kcxIcon + s_kcxIconGap + kMuitlDrawPadding;
-			item.m_rcItem = rcItem + CPoint(cxOffset, cyOffset);
-		} else if (CTabBarConfig::s_bUseFixedSize) {
-			item.m_rcItem = CRect(CPoint(cxOffset, cyOffset), CTabBarConfig::s_FixedSize);
+			areaSize.SetSize(MtlComputeWidthOfText(item.m_strDrawPath, m_pTabSkin->GetFontHandle()), CTabBarConfig::s_FixedSize.cy);
+			areaSize.cx += kcxIcon + s_kcxIconGap + kMuitlDrawPadding;
 		} else {
-			item.m_rcItem = _MeasureItemRect(m_items[i].m_strItem) + CPoint(cxOffset, cyOffset);
+			areaSize = _MeasureItemRect(m_items[i].m_strItem).Size();
 		}
+		item.m_rcItem = CRect(CPoint(cxOffset, cyOffset), areaSize);
 
-		// タブバーの幅以上なら下に移動
-		if (i != 0 && item.m_rcItem.right > nWidth - s_kSideMargin) {
+		// タブグループで強制的に改行
+		if (item.m_fsState & TCISTATE_LINEBREAK) {
 			cxOffset = s_kSideMargin;
-			cyOffset += GetItemHeight() + s_kcyGap;	// s_kcyGap分下に移動
+			cyOffset += GetItemHeight() + s_kcyTabGroupGap;	// s_kcyTabGroupGap分下に移動
 
-			if (item.m_strDrawPath.GetLength() > 0) {
-				CRect rcItem(0, 0, MtlComputeWidthOfText(item.m_strDrawPath, m_pTabSkin->GetFontHandle()), CTabBarConfig::s_FixedSize.cy);
-				rcItem.right += kcxIcon + s_kcxIconGap + kMuitlDrawPadding;
-				item.m_rcItem = rcItem + CPoint(cxOffset, cyOffset);
-			} else if (CTabBarConfig::s_bUseFixedSize) {
-				item.m_rcItem = CRect(CPoint(cxOffset, cyOffset), CTabBarConfig::s_FixedSize);
-			} else {
-				item.m_rcItem = _MeasureItemRect(m_items[i].m_strItem) + CPoint(cxOffset, cyOffset);
+			item.m_rcItem.top = cyOffset - s_kcyTabGroupGap;
+			item.m_rcItem.left = 0;
+			item.m_rcItem.right = nWidth;
+			item.m_rcItem.bottom = item.m_rcItem.top + s_kcyTabGroupBorderWidht;
+
+		} else {
+			// タブバーの幅以上なら下に移動
+			if (i > 0 && item.m_rcItem.right > (nWidth - s_kSideMargin)) {
+				cxOffset = s_kSideMargin;
+				cyOffset += GetItemHeight() + s_kcyGap;	// s_kcyGap分下に移動
+
+				item.m_rcItem = CRect(CPoint(cxOffset, cyOffset), areaSize);
 			}
-		}
 
-		cxOffset = cxOffset + m_items[i].m_rcItem.Width();
+			cxOffset = cxOffset + m_items[i].m_rcItem.Width();
 
-		m_arrSeparators.Add( CPoint(cxOffset, cyOffset) );
+			m_arrSeparators.Add(CPoint(cxOffset, cyOffset));
 
-		if (rcSrc != item.m_rcItem) {
-			InvalidateRect( _InflateGapWidth(rcSrc) );
-			InvalidateRect( _InflateGapWidth(item.m_rcItem) );
+			if (rcSrc != item.m_rcItem) {
+				InvalidateRect(_InflateGapWidth(rcSrc));
+				InvalidateRect(_InflateGapWidth(item.m_rcItem));
+			}
 		}
 	}
 }
@@ -406,6 +409,23 @@ void	CTabCtrlImpl::_UpdateLayout()
 	UpdateWindow();
 }
 
+// タブグループが消滅した可能性があるので、ボーダーを消す
+void CTabCtrlImpl::_CorrectTabGroupBorder()
+{
+	for (int i = GetItemCount() - 1; i >= 0; --i) {
+		if (GetItem(i).m_fsState & TCISTATE_LINEBREAK) {
+			if (i == 0 || i == (GetItemCount() - 1)) {
+				// 頭かケツにボーダーがあるのはおかしいので消す
+				DeleteItem(i, true);
+			} else if ((i - 1) >= 0
+				&& GetItem(i - 1).m_fsState & TCISTATE_LINEBREAK)
+			{	// ボーダーが連続するのはおかしいので消す
+				DeleteItem(i, true);
+			}
+		}
+	}
+}
+
 
 
 const CRect	CTabCtrlImpl::_InflateGapWidth(const CRect &rc) const
@@ -429,7 +449,11 @@ void	CTabCtrlImpl::ReloadSkinData()
 	if (GetTabStyle() & SKN_TAB_STYLE_DEFAULT) {
 		m_pTabSkin = new CTabSkinDefault;
 	} else {
-		m_pTabSkin = new CTabSkinTheme(static_cast<CTheme&>(*this));
+		if (CTabSkinDarkTheme::IsDarkMode()) {
+			m_pTabSkin = new CTabSkinDarkTheme;
+		} else {
+			m_pTabSkin = new CTabSkinTheme(static_cast<CTheme&>(*this));
+		}
 	}
 
 	InvalidateRect(NULL, TRUE);
@@ -470,6 +494,9 @@ void	CTabCtrlImpl::DoPaint(CDCHandle dc)
 	LRESULT lResult = ::SendMessage(hWnd, WM_ERASEBKGND, (WPARAM)dc.m_hDC, 0L);
 	::SetWindowOrgEx(dc, 0, 0, NULL);
 
+	CRect rcClient;
+	GetClientRect(&rcClient);
+	m_pTabSkin->DrawBackground(dc, rcClient);
 
 	CFontHandle	fontOld = dc.SelectFont(m_pTabSkin->GetFontHandle());
 	int			modeOld	= dc.SetBkMode(TRANSPARENT);
@@ -479,8 +506,13 @@ void	CTabCtrlImpl::DoPaint(CDCHandle dc)
 	int		nCurIndex = GetCurSel();
 	bool	bAnchorColor = false;//(GetTabCtrlExtendedStyle() & TAB2_EX_ANCHORCOLOR) != 0;
 	for (; i < GetItemCount(); ++i) {
+		if (GetItem(i).m_fsState & TCISTATE_LINEBREAK) {
+			m_pTabSkin->DrwaBreakLineBorder(dc, GetItem(i).m_rcItem);
+
+		} else {
 			// 各タブを描写する
 			m_pTabSkin->Update(dc, m_imgs, GetItem(i), bAnchorColor);
+		}
 	}
 	
 	if (nCurIndex != -1) {
@@ -502,17 +534,18 @@ int		CTabCtrlImpl::GetItemHeight() const
 		int	cxIcon = 0;
 		int	cyIcon = 0;
 
-		if (m_imgs.m_hImageList != NULL)
+		if (m_imgs.m_hImageList != NULL) {
 			m_imgs.GetIconSize(cxIcon, cyIcon);
+			cyIcon += s_kcyTabIcon * 2;
+		}
 
 		int	cy = m_pTabSkin->GetFontHeight();
-
 		if (cy < 0)
 			cy = -cy;
 
 		cy += s_kcyTextMargin * 2;
 
-		return std::max(cy, cxIcon);
+		return std::max(cy, cyIcon);
 	}
 }
 
@@ -667,7 +700,11 @@ int		CTabCtrlImpl::HitTest(const CPoint& point)
 	int nCount = GetItemCount();
 	for (; i < nCount; ++i) {
 		if (m_items[i].m_rcItem.PtInRect(point)){
-			return i;
+			if (m_items[i].m_fsState & TCISTATE_LINEBREAK) {
+				return -1;
+			} else {
+				return i;
+			}
 		}
 	}
 
@@ -766,6 +803,10 @@ void	CTabCtrlImpl::DeleteItem(int nIndex, bool bMoveNow)
 
 	m_items.erase(m_items.begin() + nIndex);
 
+	if (bMoveNow == false) {
+		_CorrectTabGroupBorder();
+	}
+
 	m_nActiveIndex = -1;
 
 	_UpdateLayout();
@@ -789,7 +830,7 @@ void	CTabCtrlImpl::DeleteItems(const CSimpleArray<int> &arrSrcs)
 // ＿＿＿＿＿＿＿＿
 // |.0.|..1..|..2.|	←タブのインデックス
 // ↑￣↑￣￣↑￣↑
-// 0   1     2   3  ←nDestIndex
+// 0  1   2   3  ←nDestIndex
 // 上のように挿入される
 bool	CTabCtrlImpl::MoveItems(int nDestIndex, const CSimpleArray<int> &arrSrcs)
 {
@@ -847,6 +888,9 @@ bool	CTabCtrlImpl::MoveItems(int nDestIndex, const CSimpleArray<int> &arrSrcs)
 		++nDestIndex;
 	}
 
+	// タブグループが消滅した可能性があるので、ボーダーを消す
+	_CorrectTabGroupBorder();
+
 	// アクティブなタブのインデックスが変わったので初期化しておく
 	m_nActiveIndex = -1;
 
@@ -901,10 +945,10 @@ void	CTabCtrlImpl::SetItemText(int nIndex, LPCTSTR strText)
 	//strTab = MtlCompactString(strTab, CTabBarConfig::s_nMaxTextLength);
 	//if (m_items[nIndex].m_strItem == strTab)
 	//	return ;
+	const int nCount = static_cast<int>(m_items.size());
 
 	CString strprevTab = m_items[nIndex].m_strItem;
 	std::vector<CTabItem*> vecprevdupTab;
-	int nCount = static_cast<int>(m_items.size());
 	for (int i = 0; i < nCount; ++i) {
 		if (i == nIndex) {
 			m_items[i].m_strDrawPath.Empty();
@@ -924,23 +968,25 @@ void	CTabCtrlImpl::SetItemText(int nIndex, LPCTSTR strText)
 
 	m_items[nIndex].m_strItem = strTab;
 
-	std::vector<CTabItem*> vecdupTabs;
-	for (int i = 0; i < nCount; ++i) {
-		if (i == nIndex) {
-			vecdupTabs.push_back(&m_items[i]);
-			continue;
+	if (CTabBarConfig::s_bShowParentFolderNameIfSameName) {
+		std::vector<CTabItem*> vecdupTabs;
+		for (int i = 0; i < nCount; ++i) {
+			if (i == nIndex) {
+				vecdupTabs.push_back(&m_items[i]);
+				continue;
+			}
+			if (strTab.CompareNoCase(m_items[i].m_strItem) == 0) {
+				vecdupTabs.push_back(&m_items[i]);
+			}
 		}
-		if (strTab.CompareNoCase(m_items[i].m_strItem) == 0) {
-			vecdupTabs.push_back(&m_items[i]);
-		}
-	}
-	if (vecdupTabs.size() >= 2) {
-		for (auto tab : vecdupTabs) {
-			CString fullPath = tab->m_strFullPath;
-			::PathRemoveFileSpec(fullPath.GetBuffer(MAX_PATH));
-			fullPath.ReleaseBuffer();
-			CString folderName = ::PathFindFileName(fullPath);
-			tab->m_strDrawPath.Format(_T("%s | %s"), tab->m_strItem, folderName);
+		if (vecdupTabs.size() >= 2) {
+			for (auto tab : vecdupTabs) {
+				CString fullPath = tab->m_strFullPath;
+				::PathRemoveFileSpec(fullPath.GetBuffer(MAX_PATH));
+				fullPath.ReleaseBuffer();
+				CString folderName = ::PathFindFileName(fullPath);
+				tab->m_strDrawPath.Format(_T("%s | %s"), tab->m_strItem, folderName);
+			}
 		}
 	}
 
@@ -997,6 +1043,14 @@ void	CTabCtrlImpl::OnDestroy()
 		m_wndUpDown.DestroyWindow();
 	if (m_wndDropBtn.IsWindow())
 		m_wndDropBtn.DestroyWindow();
+}
+
+void CTabCtrlImpl::OnSettingChange(UINT uFlags, LPCTSTR lpszSection)
+{
+	if (!lstrcmp(lpszSection, L"ImmersiveColorSet")) {
+		//アプリモードが切り替わった。
+		ReloadSkinData();
+	}
 }
 
 
@@ -1063,7 +1117,7 @@ void	CTabCtrlImpl::OnLButtonUp(UINT nFlags, CPoint point)
 			ATLASSERT( _IsValidIndex(nIndex) );
 			_PressItem();					// always clean up pressed flag
 			SetCurSel(nIndex, true);
-			NMHDR	nmhdr = { m_hWnd, GetDlgCtrlID(), TCN_SELCHANGE };
+			NMHDR	nmhdr = { m_hWnd, (UINT_PTR)GetDlgCtrlID(), TCN_SELCHANGE };
 			::SendMessage(GetParent(), WM_NOTIFY, (WPARAM) GetDlgCtrlID(), (LPARAM) &nmhdr);
 			TCTRACE(_T(" タブが切り替わった\n"));
 		} else {

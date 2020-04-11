@@ -80,7 +80,7 @@ HINSTANCE WINAPI ShellExecuteA_Hook(_In_opt_ HWND hwnd, _In_opt_ LPCSTR lpOperat
 	_In_opt_ LPCSTR lpDirectory, _In_ INT nShowCmd)
 {
 	if (::PathIsDirectoryA(lpFile) &&
-		(lpOperation == nullptr || ::lstrcmpA(lpOperation, "open") == 0 || ::lstrcmpA(lpOperation, "explore") == 0))
+		(lpOperation == nullptr || ::lstrcmpiA(lpOperation, "open") == 0 || ::lstrcmpiA(lpOperation, "explore") == 0))
 	{
 		HWND hWndTarget = FindWindow(L"ExpTabBar_NotifyWindow", NULL);
 		if (hWndTarget) {
@@ -108,7 +108,7 @@ HINSTANCE WINAPI ShellExecuteW_Hook(_In_opt_ HWND hwnd, _In_opt_ LPCWSTR lpOpera
 	_In_opt_ LPCWSTR lpDirectory, _In_ INT nShowCmd)
 {
 	if (::PathIsDirectoryW(lpFile) && 
-		(lpOperation == nullptr || ::lstrcmpW(lpOperation, L"open") == 0 || ::lstrcmpW(lpOperation, L"explore") == 0) )
+		(lpOperation == nullptr || ::lstrcmpiW(lpOperation, L"open") == 0 || ::lstrcmpiW(lpOperation, L"explore") == 0) )
 	{
 		HWND hWndTarget = FindWindow(L"ExpTabBar_NotifyWindow", NULL);
 		if (hWndTarget) {
@@ -191,7 +191,7 @@ BOOL WINAPI CreateProcessA_Hook(_In_opt_ LPCSTR lpApplicationName,
 					OpenFolderAndSelectItems folderAndSelectItems;
 					LPITEMIDLIST pidl = ::ILCreateFromPathA(path.c_str());
 					std::string folder((const char*)pidl, ::ILGetSize(pidl));
-					::ILFree(pidl);
+					::CoTaskMemFree(pidl);
 					folderAndSelectItems.pidlFolder = folder;
 
 					//INFO_LOG << L"ExpTabBarFolderOpen : " << path;
@@ -244,7 +244,7 @@ BOOL WINAPI CreateProcessW_Hook(
 					OpenFolderAndSelectItems folderAndSelectItems;
 					LPITEMIDLIST pidl = ::ILCreateFromPathW(path.c_str());
 					std::string folder((const char*)pidl, ::ILGetSize(pidl));
-					::ILFree(pidl);
+					::CoTaskMemFree(pidl);
 					folderAndSelectItems.pidlFolder = folder;
 
 					//INFO_LOG << L"ExpTabBarFolderOpen : " << path;
@@ -255,6 +255,84 @@ BOOL WINAPI CreateProcessW_Hook(
 		}
 	}
 	return orgfunc_CreateProcessW(lpApplicationName, lpCommandLine, lpProcessAttributes, lpThreadAttributes, bInheritHandles, dwCreationFlags, lpEnvironment, lpCurrentDirectory, lpStartupInfo, lpProcessInformation);
+}
+
+// MoveFileA hook
+using func_MoveFileA = BOOL(WINAPI*)(
+	_In_ LPCSTR lpExistingFileName,
+	_In_ LPCSTR lpNewFileName
+	);
+
+func_MoveFileA orgfunc_MoveFileA;
+
+BOOL WINAPI MoveFileA_Hook(
+	_In_ LPCSTR lpExistingFileName,
+	_In_ LPCSTR lpNewFileName
+)
+{
+	BOOL b = orgfunc_MoveFileA(lpExistingFileName, lpNewFileName);
+	//INFO_LOG << L"MoveFileA_Hook: " << lpExistingFileName << L" -> " << lpNewFileName;
+	return b;
+}
+
+// MoveFileW hook
+using func_MoveFileW = BOOL(WINAPI*)(
+	_In_ LPCWSTR lpExistingFileName,
+	_In_ LPCWSTR lpNewFileName
+	);
+
+func_MoveFileW orgfunc_MoveFileW;
+
+BOOL WINAPI MoveFileW_Hook(
+	_In_ LPCWSTR lpExistingFileName,
+	_In_ LPCWSTR lpNewFileName
+)
+{
+	BOOL b = orgfunc_MoveFileW(lpExistingFileName, lpNewFileName);
+	//INFO_LOG << L"MoveFileW_Hook: " << lpExistingFileName << L" -> " << lpNewFileName;
+	return b;
+}
+
+// MoveFileExA hook
+
+using func_MoveFileExA = BOOL(WINAPI*)(
+	_In_     LPCSTR lpExistingFileName,
+	_In_opt_ LPCSTR lpNewFileName,
+	_In_     DWORD    dwFlags
+	);
+
+func_MoveFileExA orgfunc_MoveFileExA;
+
+BOOL WINAPI MoveFileExA_Hook(
+	_In_     LPCSTR lpExistingFileName,
+	_In_opt_ LPCSTR lpNewFileName,
+	_In_     DWORD    dwFlags
+)
+{
+	BOOL b = orgfunc_MoveFileExA(lpExistingFileName, lpNewFileName, dwFlags);
+	//INFO_LOG << L"MoveFileExA_Hook: " << lpExistingFileName << L" -> " << lpNewFileName;
+	return b;
+}
+
+// MoveFileExW hook
+
+using func_MoveFileExW = BOOL(WINAPI*)(
+	_In_     LPCWSTR lpExistingFileName,
+	_In_opt_ LPCWSTR lpNewFileName,
+	_In_     DWORD    dwFlags
+	);
+
+func_MoveFileExW orgfunc_MoveFileExW;
+
+BOOL WINAPI MoveFileExW_Hook(
+	_In_     LPCWSTR lpExistingFileName,
+	_In_opt_ LPCWSTR lpNewFileName,
+	_In_     DWORD    dwFlags
+)
+{
+	BOOL b = orgfunc_MoveFileExW(lpExistingFileName, lpNewFileName, dwFlags);
+	//INFO_LOG << L"MoveFileExW_Hook: " << lpExistingFileName << L" -> " << lpNewFileName;
+	return b;
 }
 
 
@@ -275,12 +353,25 @@ public:
 			ret = MH_CreateHookApi(L"shell32", "SHOpenFolderAndSelectItems", (LPVOID)&SHOpenFolderAndSelectItems_Hook, (LPVOID*)&orgfunc_SHOpenFolderAndSelectItems);
 			assert(ret == MH_OK);
 
+#if 0
 			ret = MH_CreateHookApi(L"Kernel32", "CreateProcessA", (LPVOID)&CreateProcessA_Hook, (LPVOID*)&orgfunc_CreateProcessA);
 			assert(ret == MH_OK);
 
 			ret = MH_CreateHookApi(L"Kernel32", "CreateProcessW", (LPVOID)&CreateProcessW_Hook, (LPVOID*)&orgfunc_CreateProcessW);
 			assert(ret == MH_OK);
+
+			ret = MH_CreateHookApi(L"Kernel32", "MoveFileA", (LPVOID)&MoveFileA_Hook, (LPVOID*)&orgfunc_MoveFileA);
+			assert(ret == MH_OK);
+
+			ret = MH_CreateHookApi(L"Kernel32", "MoveFileW", (LPVOID)&MoveFileW_Hook, (LPVOID*)&orgfunc_MoveFileW);
+			assert(ret == MH_OK);
 			
+			ret = MH_CreateHookApi(L"Kernel32", "MoveFileExA", (LPVOID)&MoveFileExA_Hook, (LPVOID*)&orgfunc_MoveFileExA);
+			assert(ret == MH_OK);
+
+			ret = MH_CreateHookApi(L"Kernel32", "MoveFileExW", (LPVOID)&MoveFileExW_Hook, (LPVOID*)&orgfunc_MoveFileExW);
+			assert(ret == MH_OK);
+#endif
 			ret = MH_EnableHook(MH_ALL_HOOKS);
 			assert(ret == MH_OK);
 		}
@@ -300,7 +391,7 @@ private:
 
 void	InstallHook()
 {
-	static CHookUnHookManager hookManager;
+	//static CHookUnHookManager hookManager;
 }
 
 LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)

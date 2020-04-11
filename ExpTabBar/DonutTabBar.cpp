@@ -5,7 +5,10 @@
 #include <atlenc.h>
 #include <UIAutomation.h>
 #include <thread>
+#include <fstream>
 #include <boost/tokenizer.hpp>
+#include <nlohmann/json.hpp>
+
 #include "ShellWrap.h"
 #include "resource.h"
 #include "DonutFunc.h"
@@ -13,140 +16,46 @@
 #include "XmlFile.h"
 #include "ExpTabBarOption.h"
 #include "Logger.h"
+#include "CodeConvert.h"
 
-////////////////////////////////////////////////////////////
-// CNotifyWindow
+using json = nlohmann::json;
 
-// Constructor
-CNotifyWindow::CNotifyWindow(CDonutTabBar* p)
-	: m_pTabBar(p)
-{	}
+namespace {
 
-int CNotifyWindow::OnCreate(LPCREATESTRUCT lpCreateStruct)
+std::unique_ptr<char[]>	ConvertBase64fromITEMIDLIST(LPITEMIDLIST pidl)
 {
-#if 1
-	LPCWSTR kJobName = L"ExpTabBar_Job";
-	m_hJob = ::CreateJobObject(nullptr, kJobName);
-	ATLASSERT(m_hJob);
-	JOBOBJECT_EXTENDED_LIMIT_INFORMATION extendedLimit = {};
-	extendedLimit.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-	SetInformationJobObject(m_hJob, JobObjectExtendedLimitInformation, &extendedLimit, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
-
-	auto funcStartProcess = [](const CString& exePath, HANDLE hEvent) {
-		if (::PathFileExists(exePath) == FALSE)
-			return;
-
-		STARTUPINFO startUpInfo = { sizeof(STARTUPINFO) };
-		PROCESS_INFORMATION processInfo = {};
-		SECURITY_ATTRIBUTES securityAttributes = { sizeof(SECURITY_ATTRIBUTES) };
-		securityAttributes.bInheritHandle = TRUE;
-		std::wstring cmdLine = std::to_wstring((uint64_t)hEvent);
-		BOOL bRet = ::CreateProcess(exePath, (LPWSTR)cmdLine.data(),
-			nullptr, nullptr, TRUE, 0, nullptr, nullptr, &startUpInfo, &processInfo);
-		ATLASSERT(bRet);
-		::CloseHandle(processInfo.hThread);
-		::CloseHandle(processInfo.hProcess);
-	};
-
-	SECURITY_ATTRIBUTES securityAttributes = { sizeof(SECURITY_ATTRIBUTES) };
-	securityAttributes.bInheritHandle = TRUE;
-	m_hEventAPIHookTrapper = ::CreateEvent(&securityAttributes, TRUE, FALSE, NULL);
-	ATLASSERT(m_hEventAPIHookTrapper);
-	funcStartProcess(Misc::GetExeDirectory() + L"APIHookTrapper.exe", m_hEventAPIHookTrapper);
-
-#ifdef _WIN64
-	m_hEventAPIHookTrapper64 = ::CreateEvent(&securityAttributes, TRUE, FALSE, NULL);
-	ATLASSERT(m_hEventAPIHookTrapper64);
-	funcStartProcess(Misc::GetExeDirectory() + L"APIHookTrapper64.exe", m_hEventAPIHookTrapper64);
-#endif
-#endif
-	return 0;
-}
-
-void CNotifyWindow::OnDestroy()
-{
-#if 1
-	::SetEvent(m_hEventAPIHookTrapper);
-	::CloseHandle(m_hEventAPIHookTrapper);
-
-#ifdef _WIN64
-	::SetEvent(m_hEventAPIHookTrapper64);
-	::CloseHandle(m_hEventAPIHookTrapper64);
-#endif
-
-	::CloseHandle(m_hJob);
-#endif
-}
-
-/// 外部からタブを開く
-BOOL CNotifyWindow::OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct)
-{
-#if 0
-	LPCTSTR strFullPath = (LPCTSTR)pCopyDataStruct->lpData;
-#endif
-	if (pCopyDataStruct->dwData == 0) {
-		LPITEMIDLIST pidl = (LPITEMIDLIST)pCopyDataStruct->lpData;
-		if (pidl == NULL)
-			return FALSE;
-
-		CString folderPath = GetFullPathFromIDList(pidl);
-		INFO_LOG << L"ExternalOpen 0: " << (LPCWSTR)folderPath;
-
-		m_pTabBar->ExternalOpen(::ILClone(pidl));
-
-	} else if (pCopyDataStruct->dwData == 1) {
-		std::string serializedData((const char*)pCopyDataStruct->lpData, pCopyDataStruct->cbData);
-		OpenFolderAndSelectItems folderAndSelectItems;
-		folderAndSelectItems.Deserialize(serializedData);
-
-#if 0
-		// 子がフルパスになっていたら、子だけにする
-		for (UINT i = 0; i < folderAndSelectItems.cidl; ++i) {
-			LPITEMIDLIST pidl = (LPITEMIDLIST)folderAndSelectItems.apidl[i].data();
-			bool isChild = ILIsChild(pidl) != 0;
-			if (isChild == false) {
-				PITEMID_CHILD childpidl = ::ILFindLastID(pidl);
-				if (childpidl == nullptr) {
-					ATLASSERT(FALSE);
-				} else {
-					std::string childItem((const char*)childpidl, ::ILGetSize(childpidl));
-					folderAndSelectItems.apidl[i] = childItem;
-				}
-			}
+	UINT totalPIDLSize = 0;
+	PCUIDLIST_RELATIVE onePIDL = pidl;
+	while (onePIDL) {
+		UINT pidlSize = onePIDL->mkid.cb;
+		if (pidlSize == 0) {
+			totalPIDLSize += sizeof(USHORT);
+			break;
 		}
-#endif
-		// pidlFolderがフォルダでなければ、分けて入れる
-		LPCITEMIDLIST pidl = (LPCITEMIDLIST)folderAndSelectItems.pidlFolder.data();
-		if (IsExistFolderFromIDList(pidl) == false) {
-			ATLASSERT(folderAndSelectItems.cidl == 0);
-			PITEMID_CHILD childpidl = ::ILFindLastID(pidl);
-			if (childpidl == nullptr) {
-				ATLASSERT(FALSE);
-			} else {
-				std::string childItem((const char*)childpidl, ::ILGetSize(childpidl));
-				folderAndSelectItems.apidl.emplace_back(childItem);
-				++folderAndSelectItems.cidl;
-
-				LPITEMIDLIST pidlClone = ::ILClone(pidl);
-				::ILRemoveLastID(pidlClone);
-				std::string folderpidl((const char*)pidlClone, ::ILGetSize(pidlClone));
-				folderAndSelectItems.pidlFolder = folderpidl;
-				::ILFree(pidlClone);
-			}
-		}
-
-		CString folderPath = GetFullPathFromIDList((LPCITEMIDLIST)folderAndSelectItems.pidlFolder.data());
-		INFO_LOG << L"ExternalOpen 1: " << (LPCWSTR)folderPath << L" cidl : " << folderAndSelectItems.cidl << L" dwFlags : " << folderAndSelectItems.dwFlags;
-
-		m_pTabBar->ExternalOpen(::ILClone((LPCITEMIDLIST)folderAndSelectItems.pidlFolder.data()), folderAndSelectItems);
+		totalPIDLSize += pidlSize;
+		onePIDL = ILNext(onePIDL);
 	}
-	return TRUE;
+	int base64Size = ATL::Base64EncodeGetRequiredLength(static_cast<int>(totalPIDLSize), ATL_BASE64_FLAG_NOCRLF);
+	auto base64PIDL = std::make_unique<char[]>(base64Size + 1);
+	BOOL ret = ATL::Base64Encode(reinterpret_cast<const BYTE*>(pidl), totalPIDLSize, base64PIDL.get(), &base64Size, ATL_BASE64_FLAG_NOCRLF);
+	ATLASSERT(ret);
+	base64PIDL[base64Size] = '\0';
+	return base64PIDL;
 }
 
-LRESULT CNotifyWindow::OnIsMargeControlPanel(UINT uMsg, WPARAM wParam, LPARAM lParam)
+LPITEMIDLIST ConvertITEMIDLISTfromBase64(const std::string& base64PIDL, CComPtr<IMalloc> spMalloc)
 {
-	return CTabBarConfig::s_bMargeControlPanel;
+	int base64DecodeSize = ATL::Base64DecodeGetRequiredLength(static_cast<int>(base64PIDL.size()));
+	LPITEMIDLIST  pNewIDList = (LPITEMIDLIST)spMalloc->Alloc(base64DecodeSize);
+	::SecureZeroMemory(pNewIDList, base64DecodeSize);
+	BOOL ret = ATL::Base64Decode(base64PIDL.c_str(), static_cast<int>(base64PIDL.size()), reinterpret_cast<BYTE*>(pNewIDList), &base64DecodeSize);
+	ATLASSERT(ret);
+	return pNewIDList;
 }
+
+
+}	// namespace
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -165,6 +74,8 @@ CDonutTabBar::CDonutTabBar()
 	, m_pExpTabBandMessageMap(nullptr)
 {
 	m_vecHistoryItem.reserve(20);
+
+	m_mutex_currentPIDL.CreateMutex(L"kCurrentPIDLMutexName");
 }
 
 CDonutTabBar::~CDonutTabBar()
@@ -216,8 +127,32 @@ int		CDonutTabBar::_ManageInsert(bool bLink)
 		return nCurSel + 1;		// リンクはアクティブなタブの右に追加
 	} else {
 		switch (CTabBarConfig::s_nAddPos) {
-		case RIGHTPOS:		return GetItemCount();	// 一番右にタブを追加
-		case LEFTPOS:		return 0;				// 一番左に追加
+		case RIGHTPOS:	// 一番右にタブを追加
+#if 0
+		{
+			const int itemCount = GetItemCount();
+			for (int i = nCurSel; i < itemCount; ++i) {
+				if (GetItem(i).m_fsState & TCISTATE_LINEBREAK) {
+					return i;
+				}
+			}
+		}
+#endif
+		return GetItemCount();	
+
+		case LEFTPOS:	// 一番左に追加
+#if 0
+		{
+			const int itemCount = GetItemCount();
+			for (int i = nCurSel; i >= 0; --i) {
+				if (GetItem(i).m_fsState & TCISTATE_LINEBREAK) {
+					return i + 1;
+				}
+			}
+		}
+#endif
+		return 0;
+
 		case ACTIVERIGHT:	return nCurSel + 1;		// アクティブなタブの右に追加
 		case ACTIVELEFT:	return nCurSel;			// アクティブなタブの左に追加
 		default:
@@ -239,107 +174,69 @@ void	CDonutTabBar::SaveAllTab()
 	// トラベルログを保存する
 	_SaveTravelLog(GetCurSel());
 
-	CString	TabList = Misc::GetExeDirectory() + _T("TabList.xml");
+	json tabListArray = json::array();
+	for (int i = 0; i < GetItemCount(); ++i) {
+		const CTabItem& Item = GetItem(i);
+		json jsonTabData;
+		jsonTabData["Name"] = CodeConvert::UTF8fromUTF16((LPCWSTR)Item.m_strItem);
+		if ((Item.m_fsState & TCISTATE_LINEBREAK) == 0) {
+			jsonTabData["FullPath"] = CodeConvert::UTF8fromUTF16((LPCWSTR)Item.m_strFullPath);
+			jsonTabData["SelectedIndex"] = Item.m_nSelectedIndex;	// Top index
+			bool bNavigateLock = (Item.m_fsState & TCISTATE_NAVIGATELOCK) != 0;
+			jsonTabData["NavigateLock"] = bNavigateLock;
+			jsonTabData["ITEMIDLIST"] = ConvertBase64fromITEMIDLIST(GetItemIDList(i)).get();
 
-	try {
-		CXmlFileWrite	xmlWrite(TabList);
-
-		// <TabList>
-		xmlWrite.WriteStartElement(L"TabList");
-
-		for (int i = 0; i < GetItemCount(); ++i) {
-			const CTabItem &Item = GetItem(i);
-
-			xmlWrite.WriteStartElement(L"Tab");
-			xmlWrite.WriteAttributeString(L"name"	 , Item.m_strItem);
-			xmlWrite.WriteAttributeString(L"FullPath", Item.m_strFullPath);
-			CString	strIndex;
-			strIndex.Format(_T("%d"), Item.m_nSelectedIndex);
-			xmlWrite.WriteAttributeString(L"index"	 , strIndex);
-
-			CString	strNavigate;
-			if (Item.m_fsState & TCISTATE_NAVIGATELOCK) {
-				strNavigate = L"true";
-			} else {
-				strNavigate = L"false";
-			}
-			xmlWrite.WriteAttributeString(L"NavigateLock", strNavigate);
-
-			xmlWrite.WriteStartElement(L"ITEMIDLIST");
-			LPITEMIDLIST pidl = GetItemIDList(i);
-			do {
-				xmlWrite.WriteStartElement(L"ITEM");
-				CString strabID = _T("\0");
-				int	ByteSize = pidl->mkid.cb;
-				if (ByteSize != 0) {
-					ByteSize -= sizeof(USHORT);
-					for (int i = 0; i < ByteSize; ++i) {
-						strabID.AppendFormat(_T("%d,"), *(pidl->mkid.abID + i));
-					}
+			auto funcCreateJsonTravelLog = [](const TRAVELLOG& travelLog) -> json {
+				json jsonTravelLog = jsonTravelLog.array();
+				for (auto& tlItem : travelLog) {
+					json jsTlItem;
+					jsTlItem["title"] = CodeConvert::UTF8fromUTF16((LPCWSTR)tlItem.first);
+					jsTlItem["URL"] = CodeConvert::UTF8fromUTF16((LPCWSTR)tlItem.second);
+					jsonTravelLog.push_back(jsTlItem);
 				}
-				xmlWrite.WriteAttributeValue(L"cb", pidl->mkid.cb);
-				xmlWrite.WriteAttributeString(L"abID", strabID);
-				xmlWrite.WriteFullEndElement();
-				if (ByteSize == 0)
-					break;
-			} while (pidl = ::ILGetNext(pidl));
-			xmlWrite.WriteFullEndElement();
-
-
-			xmlWrite.WriteStartElement(L"TravelLog");
-			xmlWrite.WriteStartElement(L"Back");
-			for (int i = 0; i < Item.m_pTravelLogBack->size();++i) {
-				xmlWrite.WriteStartElement(L"item");
-				xmlWrite.WriteAttributeString(L"title", Item.m_pTravelLogBack->at(i).first);
-				xmlWrite.WriteAttributeString(L"url"  , Item.m_pTravelLogBack->at(i).second);
-				xmlWrite.WriteFullEndElement();	// </item>
-			}
-			xmlWrite.WriteFullEndElement();	// </Back>
-			
-			xmlWrite.WriteStartElement(L"Fore");
-			for (int i = 0; i < Item.m_pTravelLogFore->size();++i) {
-				xmlWrite.WriteStartElement(L"item");
-				xmlWrite.WriteAttributeString(L"title", Item.m_pTravelLogFore->at(i).first);
-				xmlWrite.WriteAttributeString(L"url"  , Item.m_pTravelLogFore->at(i).second);
-				xmlWrite.WriteFullEndElement();	// </item>
-			}
-			xmlWrite.WriteFullEndElement();	// </Fore>
-			xmlWrite.WriteFullEndElement();	// </TravelLog>
-
-			xmlWrite.WriteFullEndElement();	// </Tab>
+				return jsonTravelLog;
+			};
+			jsonTabData["TravelLogBack"] = funcCreateJsonTravelLog(*Item.m_pTravelLogBack);
+			jsonTabData["TravelLogFore"] = funcCreateJsonTravelLog(*Item.m_pTravelLogFore);
 		}
+
+		tabListArray.push_back(jsonTabData);
 	}
-	catch (LPCTSTR strError) {
-		MessageBox(strError);
-	}
-	catch (...) {
-		MessageBox(_T("SaveAllTabListに失敗"));
-	}
+	json jsonTabList;
+	jsonTabList["TabList"] = tabListArray;
+	
+	CString	TabList = Misc::GetExeDirectory() + _T("TabList.json");
+	CString	tempTabList = Misc::GetExeDirectory() + _T("TabList_temp.json");
+	std::ofstream fs((LPCWSTR)tempTabList);
+	//std::string dumpJson = jsonTabList.dump(4);
+	fs << std::setw(4) << jsonTabList;
+	fs.close();
+
+	BOOL ret = ::MoveFileExW(tempTabList, TabList, MOVEFILE_REPLACE_EXISTING);
+	ATLASSERT(ret);
 }
 
 
 void	CDonutTabBar::RestoreAllTab()
 {
-	CString	TabList = Misc::GetExeDirectory() + _T("TabList.xml");
-	if (::PathFileExists(TabList) == FALSE)
-		return;
+	CString	TabListXML = Misc::GetExeDirectory() + _T("TabList.xml");
+	if (::PathFileExists(TabListXML)) {
+		vector<CTabItem>	vecItem;
+		CTabItem			item;
 
-	vector<CTabItem>	vecItem;
-	CTabItem			item;
+		vector<std::pair<int, BYTE*> > vecIDList;
 
-	vector<std::pair<int, BYTE*> > vecIDList;
-
-	TRAVELLOG*			pBackLog = NULL;
-	TRAVELLOG*			pForeLog = NULL;
+		TRAVELLOG* pBackLog = NULL;
+		TRAVELLOG* pForeLog = NULL;
 
 
-	try {
-		CXmlFileRead	xmlRead(TabList);
-		CString 		Element;
-		XmlNodeType 	nodeType;
-		while (xmlRead.Read(&nodeType) == S_OK) {
-			switch (nodeType) {
-			case XmlNodeType_Element: 
+		try {
+			CXmlFileRead	xmlRead(TabListXML);
+			CString 		Element;
+			XmlNodeType 	nodeType;
+			while (xmlRead.Read(&nodeType) == S_OK) {
+				switch (nodeType) {
+				case XmlNodeType_Element:
 				{
 					Element = xmlRead.GetLocalName();	// 要素を取得
 					if (Element == _T("Tab")) {
@@ -393,9 +290,9 @@ void	CDonutTabBar::RestoreAllTab()
 									title = xmlRead.GetValue();
 									if (xmlRead.MoveToNextAttribute()) {
 										url = xmlRead.GetValue();
-										pBackLog->push_back( std::make_pair(title, url) );
+										pBackLog->push_back(std::make_pair(title, url));
 									}
-								}
+}
 							}
 						}
 						item.m_pTravelLogBack = pBackLog;
@@ -413,24 +310,24 @@ void	CDonutTabBar::RestoreAllTab()
 									title = xmlRead.GetValue();
 									if (xmlRead.MoveToNextAttribute()) {
 										url = xmlRead.GetValue();
-										pForeLog->push_back( std::make_pair(title, url) );
+										pForeLog->push_back(std::make_pair(title, url));
 									}
 								}
 							}
 						}
 						item.m_pTravelLogFore = pForeLog;
-						pForeLog = NULL;					
+						pForeLog = NULL;
 					}
 					break;
 				}
-			case XmlNodeType_EndElement:
+				case XmlNodeType_EndElement:
 				{
 					if (xmlRead.GetLocalName() == _T("Tab")) {
 						// </Tab>にきたので
 
 						/* ITEMIDLISTを作成 */
 						int nSize = sizeof(USHORT);
-						for (int i = 0; i < vecIDList.size(); ++i) {
+						for (size_t i = 0; i < vecIDList.size(); ++i) {
 							nSize += vecIDList[i].first;
 						}
 
@@ -443,7 +340,7 @@ void	CDonutTabBar::RestoreAllTab()
 						::SecureZeroMemory(pRetIDList, nSize);
 
 						std::size_t	nCount = vecIDList.size();
-						for (int i = 0; i < nCount ; ++i) {
+						for (size_t i = 0; i < nCount; ++i) {
 							pRetIDList->mkid.cb = vecIDList[i].first;
 							memcpy(pRetIDList->mkid.abID, vecIDList[i].second, pRetIDList->mkid.cb - sizeof(USHORT));
 							delete vecIDList[i].second;
@@ -459,114 +356,131 @@ void	CDonutTabBar::RestoreAllTab()
 				}
 			}
 		}
-		/* タブに追加していく */
-		for (int i = 0; i < vecItem.size(); ++i) {
-			AddTabItem(vecItem[i]);
+			/* タブに追加していく */
+			for (size_t i = 0; i < vecItem.size(); ++i) {
+				AddTabItem(vecItem[i]);
+			}
+
+		} catch (LPCTSTR strError) {
+			MessageBox(strError);
+		} catch (...) {
+			MessageBox(_T("RestoreAllTabに失敗"));
 		}
 
+		SaveAllTab();
+		::DeleteFileW(TabListXML);
+		return;
 	}
-	catch (LPCTSTR strError) {
-		MessageBox(strError);
-	}
-	catch (...) {
-		MessageBox(_T("RestoreAllTabに失敗"));
+
+	CString	TabListJson = Misc::GetExeDirectory() + _T("TabList.json");
+	if (::PathFileExists(TabListJson)) {
+		std::ifstream fs((LPCWSTR)TabListJson);
+		json jsonTabList;
+		fs >> jsonTabList;
+		fs.close();
+
+		CComPtr<IMalloc> spMalloc;
+		::SHGetMalloc(&spMalloc);
+		ATLASSERT(spMalloc);
+
+		json jsonTabListArray = jsonTabList["TabList"];
+		for (auto& jsonTabItem : jsonTabListArray) {
+			CTabItem item;
+			item.m_strItem = CodeConvert::UTF16fromUTF8(jsonTabItem["Name"].get<std::string>()).c_str();
+			if (item.m_strItem == L"<break>") {
+				item.m_fsState |= TCISTATE_LINEBREAK;
+			} else {
+				item.m_strFullPath = CodeConvert::UTF16fromUTF8(jsonTabItem["FullPath"].get<std::string>()).c_str();
+				item.m_nSelectedIndex = jsonTabItem["SelectedIndex"];
+				bool bNavigateLock = jsonTabItem["NavigateLock"];
+				if (bNavigateLock) {
+					item.m_fsState |= TCISTATE_NAVIGATELOCK;
+				}
+				std::string base64PIDL = jsonTabItem["ITEMIDLIST"];
+				int base64DecodeSize = ATL::Base64DecodeGetRequiredLength(static_cast<int>(base64PIDL.size()));
+				LPITEMIDLIST  pNewIDList = (LPITEMIDLIST)spMalloc->Alloc(base64DecodeSize);
+				::SecureZeroMemory(pNewIDList, base64DecodeSize);
+				BOOL ret = ATL::Base64Decode(base64PIDL.c_str(), static_cast<int>(base64PIDL.size()), reinterpret_cast<BYTE*>(pNewIDList), &base64DecodeSize);
+				ATLASSERT(ret);
+				item.m_pidl = pNewIDList;
+
+				auto funcCreateTravelLog = [](const json& jsonTravelLog) -> TRAVELLOG* {
+					TRAVELLOG* travelLog = new TRAVELLOG;
+					for (auto& jsTLItem : jsonTravelLog) {
+						std::wstring title = CodeConvert::UTF16fromUTF8(jsTLItem["title"].get<std::string>());
+						std::wstring URL = CodeConvert::UTF16fromUTF8(jsTLItem["URL"].get<std::string>());
+						auto tlpair = std::make_pair<CString, CString>(title.c_str(), URL.c_str());
+						travelLog->push_back(tlpair);
+					}
+					return travelLog;
+				};
+				item.m_pTravelLogBack = funcCreateTravelLog(jsonTabItem["TravelLogBack"]);
+				item.m_pTravelLogFore = funcCreateTravelLog(jsonTabItem["TravelLogFore"]);
+			}
+			AddTabItem(item);
+		}
 	}
 }
 
 // 履歴を保存する
 void	CDonutTabBar::SaveHistory()
 {
-	CString	History = Misc::GetExeDirectory() + _T("History.xml");
+	json historyListArray = json::array();
+	for (const auto& historyItem : m_vecHistoryItem) {
+		json jsonHistoryData;
+		jsonHistoryData["Title"] = CodeConvert::UTF8fromUTF16((LPCWSTR)historyItem.strTitle);		
+		jsonHistoryData["FullPath"] = CodeConvert::UTF8fromUTF16((LPCWSTR)historyItem.strFullPath);
+		jsonHistoryData["ITEMIDLIST"] = ConvertBase64fromITEMIDLIST(historyItem.pidl).get();
 
-	try {
-		CXmlFileWrite	xmlWrite(History);
-
-		// <History>
-		xmlWrite.WriteStartElement(L"History");
-
-		std::size_t	nCount = m_vecHistoryItem.size();
-		for (int i = 0; i < nCount; ++i) {
-			const HistoryItem &Item = m_vecHistoryItem[i];
-
-			// <item>
-			xmlWrite.WriteStartElement(L"item");
-			xmlWrite.WriteAttributeString(L"Title"	 , Item.strTitle);
-			xmlWrite.WriteAttributeString(L"FullPath", Item.strFullPath);
-
-			// <ITEMIDLIST>
-			xmlWrite.WriteStartElement(L"ITEMIDLIST");
-			LPITEMIDLIST pidl = Item.pidl;
-			do {
-				xmlWrite.WriteStartElement(L"ITEM");
-				CString strabID = _T("\0");
-				int	ByteSize = pidl->mkid.cb;
-				if (ByteSize != 0) {
-					ByteSize -= sizeof(USHORT);
-					for (int i = 0; i < ByteSize; ++i) {
-						strabID.AppendFormat(_T("%d,"), *(pidl->mkid.abID + i));
-					}
-				}
-				xmlWrite.WriteAttributeValue(L"cb", pidl->mkid.cb);
-				xmlWrite.WriteAttributeString(L"abID", strabID);
-				xmlWrite.WriteFullEndElement();
-				if (ByteSize == 0)
-					break;
-			} while (pidl = ::ILGetNext(pidl));
-			xmlWrite.WriteFullEndElement();	// </ITEMIDLIST>
-
-
-			xmlWrite.WriteStartElement(L"TravelLog");
-			xmlWrite.WriteStartElement(L"Back");
-			for (int i = 0; i < Item.pLogBack->size();++i) {
-				xmlWrite.WriteStartElement(L"item");
-				xmlWrite.WriteAttributeString(L"title", Item.pLogBack->at(i).first);
-				xmlWrite.WriteAttributeString(L"url"  , Item.pLogBack->at(i).second);
-				xmlWrite.WriteFullEndElement();	// </item>
+		auto funcCreateJsonTravelLog = [](const TRAVELLOG& travelLog) -> json {
+			json jsonTravelLog = jsonTravelLog.array();
+			for (auto& tlItem : travelLog) {
+				json jsTlItem;
+				jsTlItem["title"] = CodeConvert::UTF8fromUTF16((LPCWSTR)tlItem.first);
+				jsTlItem["URL"] = CodeConvert::UTF8fromUTF16((LPCWSTR)tlItem.second);
+				jsonTravelLog.push_back(jsTlItem);
 			}
-			xmlWrite.WriteFullEndElement();	// </Back>
-			
-			xmlWrite.WriteStartElement(L"Fore");
-			for (int i = 0; i < Item.pLogFore->size();++i) {
-				xmlWrite.WriteStartElement(L"item");
-				xmlWrite.WriteAttributeString(L"title", Item.pLogFore->at(i).first);
-				xmlWrite.WriteAttributeString(L"url"  , Item.pLogFore->at(i).second);
-				xmlWrite.WriteFullEndElement();	// </item>
-			}
-			xmlWrite.WriteFullEndElement();	// </Fore>
-			xmlWrite.WriteFullEndElement();	// </TravelLog>
+			return jsonTravelLog;
+		};
+		jsonHistoryData["TravelLogBack"] = funcCreateJsonTravelLog(*historyItem.pLogBack);
+		jsonHistoryData["TravelLogFore"] = funcCreateJsonTravelLog(*historyItem.pLogFore);
 
-			xmlWrite.WriteFullEndElement();	// </item>
-		}
+		historyListArray.push_back(jsonHistoryData);
 	}
-	catch (LPCTSTR strError) {
-		MessageBox(strError);
-	}
-	catch (...) {
-		MessageBox(_T("SaveHistoryに失敗"));
-	}
+	json jsonHistoryList;
+	jsonHistoryList["History"] = historyListArray;
+
+	CString	Historyjson = Misc::GetExeDirectory() + _T("History.json");
+	CString tempHistoryjson = Misc::GetExeDirectory() + _T("History_temp.json");
+	std::ofstream fs((LPCWSTR)tempHistoryjson);
+	//std::string dumpJson = jsonTabList.dump(4);
+	fs << std::setw(4) << jsonHistoryList;
+	fs.close();
+
+	BOOL ret = ::MoveFileExW(tempHistoryjson, Historyjson, MOVEFILE_REPLACE_EXISTING);
+	ATLASSERT(ret);
 }
 
 // 履歴を復元する
 void	CDonutTabBar::RestoreHistory()
 {
-	CString	History = Misc::GetExeDirectory() + _T("History.xml");
-	if (::PathFileExists(History) == FALSE)
-		return;
-	vector<HistoryItem>	vecItem;
-	HistoryItem			item;
+	CString	HistoryXML = Misc::GetExeDirectory() + _T("History.xml");
+	if (::PathFileExists(HistoryXML)) {
+		vector<HistoryItem>	vecItem;
+		HistoryItem			item;
 
-	vector<std::pair<int, BYTE*> > vecIDList;
+		vector<std::pair<int, BYTE*> > vecIDList;
 
-	TRAVELLOG*			pBackLog = NULL;
-	TRAVELLOG*			pForeLog = NULL;
+		TRAVELLOG* pBackLog = NULL;
+		TRAVELLOG* pForeLog = NULL;
 
-	try {
-		CXmlFileRead	xmlRead(History);
-		CString 		Element;
-		XmlNodeType 	nodeType;
-		while (xmlRead.Read(&nodeType) == S_OK) {
-			switch (nodeType) {
-			case XmlNodeType_Element: 
+		try {
+			CXmlFileRead	xmlRead(HistoryXML);
+			CString 		Element;
+			XmlNodeType 	nodeType;
+			while (xmlRead.Read(&nodeType) == S_OK) {
+				switch (nodeType) {
+				case XmlNodeType_Element:
 				{
 					Element = xmlRead.GetLocalName();	// 要素を取得
 					if (Element == _T("item")) {
@@ -610,7 +524,7 @@ void	CDonutTabBar::RestoreHistory()
 									title = xmlRead.GetValue();
 									if (xmlRead.MoveToNextAttribute()) {
 										url = xmlRead.GetValue();
-										pBackLog->push_back( std::make_pair(title, url) );
+										pBackLog->push_back(std::make_pair(title, url));
 									}
 								}
 							}
@@ -630,24 +544,24 @@ void	CDonutTabBar::RestoreHistory()
 									title = xmlRead.GetValue();
 									if (xmlRead.MoveToNextAttribute()) {
 										url = xmlRead.GetValue();
-										pForeLog->push_back( std::make_pair(title, url) );
+										pForeLog->push_back(std::make_pair(title, url));
 									}
 								}
 							}
 						}
 						item.pLogFore = pForeLog;
-						pForeLog = NULL;					
+						pForeLog = NULL;
 					}
 					break;
 				}
-			case XmlNodeType_EndElement:
+				case XmlNodeType_EndElement:
 				{
 					if (xmlRead.GetLocalName() == _T("item")) {
 						// </item>にきたので
 
 						/* ITEMIDLISTを作成 */
 						int nSize = sizeof(USHORT);
-						for (int i = 0; i < vecIDList.size(); ++i) {
+						for (size_t i = 0; i < vecIDList.size(); ++i) {
 							nSize += vecIDList[i].first;
 						}
 
@@ -660,7 +574,7 @@ void	CDonutTabBar::RestoreHistory()
 						::SecureZeroMemory(pRetIDList, nSize);
 
 						std::size_t	nCount = vecIDList.size();
-						for (int i = 0; i <  nCount; ++i) {
+						for (size_t i = 0; i < nCount; ++i) {
 							pRetIDList->mkid.cb = vecIDList[i].first;
 							if (pRetIDList->mkid.cb == 0)
 								break;
@@ -676,26 +590,71 @@ void	CDonutTabBar::RestoreHistory()
 					}
 					break;
 				}
+				}
 			}
+			/* 履歴に追加していく */
+			for (size_t i = 0; i < vecItem.size(); ++i) {
+				HICON	hIcon = CreateIconFromIDList(vecItem[i].pidl);
+				if (hIcon == NULL)
+					hIcon = m_imgs.ExtractIcon(0);
+				if (hIcon) {
+					vecItem[i].hbmp = Misc::CreateBitmapFromHICON(hIcon);
+					::DestroyIcon(hIcon);
+				}
+				m_vecHistoryItem.push_back(vecItem[i]);
+			}
+
+		} catch (LPCTSTR strError) {
+			MessageBox(strError);
+		} catch (...) {
+			MessageBox(_T("RestoreHistoryに失敗"));
 		}
-		/* 履歴に追加していく */
-		for (int i = 0; i < vecItem.size(); ++i) {
-			HICON	hIcon = CreateIconFromIDList(vecItem[i].pidl);
+
+		SaveHistory();
+		::DeleteFileW(HistoryXML);
+		return;
+	}
+
+	CString	Historyjson = Misc::GetExeDirectory() + _T("History.json");
+	if (::PathFileExists(Historyjson)) {
+		std::ifstream fs((LPCWSTR)Historyjson);
+		json jsonHistory;
+		fs >> jsonHistory;
+		fs.close();
+
+		CComPtr<IMalloc> spMalloc;
+		::SHGetMalloc(&spMalloc);
+		ATLASSERT(spMalloc);
+
+		json jsonHistoryArray = jsonHistory["History"];
+		for (auto& jsonItem : jsonHistoryArray) {
+			HistoryItem item;
+			item.strTitle = CodeConvert::UTF16fromUTF8(jsonItem["Title"].get<std::string>()).c_str();
+			item.strFullPath = CodeConvert::UTF16fromUTF8(jsonItem["FullPath"].get<std::string>()).c_str();			
+			item.pidl = ConvertITEMIDLISTfromBase64(jsonItem["ITEMIDLIST"], spMalloc);
+
+			auto funcCreateTravelLog = [](const json& jsonTravelLog) -> TRAVELLOG* {
+				TRAVELLOG* travelLog = new TRAVELLOG;
+				for (auto& jsTLItem : jsonTravelLog) {
+					std::wstring title = CodeConvert::UTF16fromUTF8(jsTLItem["title"].get<std::string>());
+					std::wstring URL = CodeConvert::UTF16fromUTF8(jsTLItem["URL"].get<std::string>());
+					auto tlpair = std::make_pair<CString, CString>(title.c_str(), URL.c_str());
+					travelLog->push_back(tlpair);
+				}
+				return travelLog;
+			};
+			item.pLogBack = funcCreateTravelLog(jsonItem["TravelLogBack"]);
+			item.pLogFore = funcCreateTravelLog(jsonItem["TravelLogFore"]);
+
+			HICON	hIcon = CreateIconFromIDList(item.pidl);
 			if (hIcon == NULL)
 				hIcon = m_imgs.ExtractIcon(0);
 			if (hIcon) {
-				vecItem[i].hbmp = Misc::CreateBitmapFromHICON(hIcon);
+				item.hbmp = Misc::CreateBitmapFromHICON(hIcon);
 				::DestroyIcon(hIcon);
 			}
-			m_vecHistoryItem.push_back(vecItem[i]);
+			m_vecHistoryItem.push_back(item);
 		}
-
-	}
-	catch (LPCTSTR strError) {
-		MessageBox(strError);
-	}
-	catch (...) {
-		MessageBox(_T("RestoreHistoryに失敗"));
 	}
 }
 
@@ -709,12 +668,17 @@ int CDonutTabBar::_ManageClose(int nActiveIndex)
 	if (CTabBarConfig::s_bLeftActiveOnClose) {
 		// 閉じるときアクティブなタブの左をアクティブにする
 		int nNext = nActiveIndex - 1;
+		if (_IsValidIndex(nNext) && (GetItem(nNext).m_fsState & TCISTATE_LINEBREAK)) {
+			--nNext;
+		}
 
 		if (nNext >= 0) {
 			return nNext;
 		} else {
 			nNext = nActiveIndex + 1;
-
+			if (_IsValidIndex(nNext) && (GetItem(nNext).m_fsState & TCISTATE_LINEBREAK)) {
+				++nNext;
+			}
 			if (nNext < nCount) {
 				return nNext;
 			}
@@ -722,12 +686,16 @@ int CDonutTabBar::_ManageClose(int nActiveIndex)
 	} else {
 		// 閉じるときアクティブなタブの右をアクティブにする
 		int nNext = nActiveIndex + 1;
-
+		if (_IsValidIndex(nNext) && (GetItem(nNext).m_fsState & TCISTATE_LINEBREAK)) {
+			++nNext;
+		}
 		if (nNext < nCount) {
 			return nNext;
 		} else {
 			nNext = nActiveIndex - 1;
-
+			if (_IsValidIndex(nNext) && (GetItem(nNext).m_fsState & TCISTATE_LINEBREAK)) {
+				--nNext;
+			}
 			if (nNext >= 0) {
 				return nNext;
 			}
@@ -1000,14 +968,14 @@ void	CDonutTabBar::_AddHistory(int nDestroy)
 	m_vecHistoryItem.insert(m_vecHistoryItem.begin(), item);
 
 	// 重複を削除する
-	for (int i = 1; i < m_vecHistoryItem.size(); ++i) {
+	for (size_t i = 1; i < m_vecHistoryItem.size(); ++i) {
 		if (m_vecHistoryItem[i].strFullPath == item.strFullPath) {
-			_DeleteHistory(i);
+			_DeleteHistory(static_cast<int>(i));
 			return;
 		}
 	}
 
-	if (m_vecHistoryItem.size() > CTabBarConfig::s_nMaxHistoryCount) {
+	if (static_cast<int>(m_vecHistoryItem.size()) > CTabBarConfig::s_nMaxHistoryCount) {
 		_DeleteHistory(CTabBarConfig::s_nMaxHistoryCount);
 	}
 }
@@ -1025,6 +993,7 @@ void	CDonutTabBar::_DeleteHistory(int nIndex)
 
 void	CDonutTabBar::_ClearSearchText()
 {
+	return;
 	try {
 		HRESULT	hr;
 		CComPtr<IUIAutomation>	spUIAutomation;
@@ -1138,6 +1107,15 @@ int		CDonutTabBar::OnTabCreate(LPITEMIDLIST pidl, bool bAddLast /*= false*/, boo
 	int	nPos;
 	if (bAddLast) {
 		nPos = GetItemCount();
+#if 0
+		const int itemCount = GetItemCount();
+		for (int i = GetCurSel(); i < itemCount; ++i) {
+			if (GetItem(i).m_fsState & TCISTATE_LINEBREAK) {
+				nPos = i;
+				break;
+			}
+		}
+#endif
 	} else {
 		nPos = _ManageInsert(bLink);
 	}
@@ -1252,7 +1230,7 @@ void	CDonutTabBar::ExternalOpen(LPITEMIDLIST pidl,
 			if (folderAndSelectItems) {
 				if (m_bTabChanged) {
 					m_folderAndSelectItems = folderAndSelectItems;
-					INFO_LOG << L"ExternalOpen CurSelOpen tabchanged : true";
+					//INFO_LOG << L"ExternalOpen CurSelOpen tabchanged : true";
 
 				} else {
 					auto spFolderAndSelectItems = std::make_shared<OpenFolderAndSelectItems>(*folderAndSelectItems);
@@ -1262,7 +1240,7 @@ void	CDonutTabBar::ExternalOpen(LPITEMIDLIST pidl,
 				}
 			}
 		}
-		::ILFree(pidl);
+		::CoTaskMemFree(pidl);
 
 	} else {
 		SetCurSel(OnTabCreate(pidl));
@@ -1303,6 +1281,15 @@ void	CDonutTabBar::OnSetCurSel(int nIndex, int nOldIndex)
 			_SaveSelectedIndex(nOldIndex);
 			
 			m_spShellBrowser->BrowseObject(pidl, SBSP_NOAUTOSELECT | SBSP_CREATENOHISTORY);
+
+			{
+				CMutexLock lock(m_mutex_currentPIDL);
+				m_currentPIDL.CloseHandle();
+
+				UINT ilSize = ::ILGetSize(pidl);
+				void* view = m_currentPIDL.CreateSharedMemory(kCurrentPIDLSharedName, (DWORD)ilSize);
+				::memcpy_s(view, ilSize, (void*)pidl, ilSize);
+			}
 
 #if 0
 			try {
@@ -1393,11 +1380,11 @@ DROPEFFECT CDonutTabBar::OnDragEnter(IDataObject *pDataObject, DWORD dwKeyState,
 				LPITEMIDLIST	pidl = ::ILCombine(pParentidl, pChildIDList);
 				ATLASSERT(pidl);
 				if (ShellWrap::IsExistFolderFromIDList(pidl)) {
-					::ILFree(pidl);
+					::CoTaskMemFree(pidl);
 					m_bDragItemIncludeFolder = true;
 					break;
 				}
-				::ILFree(pidl);
+				::CoTaskMemFree(pidl);
 			}
 			/* ドラッグアイテムが ルートドライブ(ショートカットしか作れない)かどうか */
 			m_bDragItemIsRoot = false;
@@ -1405,7 +1392,7 @@ DROPEFFECT CDonutTabBar::OnDragEnter(IDataObject *pDataObject, DWORD dwKeyState,
 				LPCITEMIDLIST pChildIDList = GetPIDLItem(pida, 0);
 				LPITEMIDLIST	pidl = ::ILCombine(pParentidl, pChildIDList);
 				CString strDragItemPath = ShellWrap::GetFullPathFromIDList(pidl);
-				::ILFree(pidl);
+				::CoTaskMemFree(pidl);
 				m_bDragItemIsRoot = ::PathIsRoot(strDragItemPath) != 0	// ドライブルート
 					|| strDragItemPath.Left(2) == _T("::")	// 特殊フォルダ
 					|| pidl->mkid.cb == 0;					// デスクトップ
@@ -1693,7 +1680,7 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 			::CoTaskMemFree(pidl);
 
 			::PostMessage(GetTopLevelWindow(), WM_CLOSE, 0, 0);
-
+#if 0
 			OSVERSIONINFO	osvi = { sizeof(osvi) };
 			GetVersionEx(&osvi);
 			if (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) {	// Win7
@@ -1707,6 +1694,7 @@ void	CDonutTabBar::RefreshTab(LPCTSTR title)
 					::CloseHandle(h);
 				}).detach();
 			}
+#endif
 			return;
 		} else {	// 他のエクスプローラーはない
 
@@ -1780,6 +1768,15 @@ REFRESH:
 
 	/* アイテムＩＤリストを変更 */
 	SetItemIDList(nCurIndex, pidl);
+
+	{
+		CMutexLock lock(m_mutex_currentPIDL);
+		m_currentPIDL.CloseHandle();
+
+		UINT ilSize = ::ILGetSize(pidl);
+		void* view = m_currentPIDL.CreateSharedMemory(kCurrentPIDLSharedName, (DWORD)ilSize);
+		::memcpy_s(view, ilSize, (void*)pidl, ilSize);
+	}
 }
 
 
@@ -1859,28 +1856,8 @@ void	CDonutTabBar::DocumentComplete()
 			}
 		}
 
-
-		CListViewCtrl ListView;
-		HWND hWnd;
-		CComPtr<IShellView>	spShellView;
-		HRESULT hr = m_spShellBrowser->QueryActiveShellView(&spShellView);
-		if (SUCCEEDED(hr)) {
-			hr = spShellView->GetWindow(&hWnd);
-			if (SUCCEEDED(hr)) {
-				ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
-				if (ListView.m_hWnd != NULL) {
-					CComQIPtr<IFolderView2>	spFolderView = spShellView;
-					UINT viewMode = 0;
-					spFolderView->GetCurrentViewMode(&viewMode);
-					if (viewMode == FVM_ICON) {
-						//ListView.EnsureVisible(GetItemSelectedIndex(GetCurSel()), FALSE);
-					} else {
-						int nPerPage = ListView.GetCountPerPage();
-						ListView.EnsureVisible(GetItemSelectedIndex(GetCurSel()) + nPerPage - 1, FALSE);
-					}
-				}
-			}
-		}
+		//_RestoreSelectedIndex();
+		SetTimer(RestoreScrollPosTimerID, 1);
 		
 		if (m_folderAndSelectItems) {
 			int nIndex = _IDListIsEqualIndex((LPITEMIDLIST)m_folderAndSelectItems->pidlFolder.data());
@@ -1920,7 +1897,7 @@ int		CDonutTabBar::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	LPCTSTR kls[] =  { _T("WorkerW"), _T("ReBarWindow32"), _T("UniversalSearchBand"), _T("Search Box"), _T("SearchEditBoxWrapperClass"), NULL };
 	const int ids[] = { 0, 0xA005, 0, 0, 0, -1 };
 	m_hSearch = FindChildWindowIDRecursive(GetTopLevelWindow(), kls, ids);
-	ATLASSERT(m_hSearch);
+	//ATLASSERT(m_hSearch);
 
 	m_menuPopup.LoadMenu(IDM_TAB);
 	m_menuHistory = m_menuPopup.GetSubMenu(1).GetSubMenu(0);
@@ -1974,6 +1951,39 @@ void	CDonutTabBar::OnRButtonUp(UINT nFlags, CPoint point)
 		_ExeCommand(nIndex, CTabBarConfig::s_RClickCommand);
 
 	} else {	// タブ外
+		
+		CMenuHandle menu = m_menuPopup.GetSubMenu(1);
+
+		int	i = CTabBarConfig::s_bMultiLine ? 0 : m_nFirstIndexOnSingleLine;
+		int nCount = GetItemCount();
+		int offsetY = 0;
+		m_tabGroupIndexOnRClick = -1;
+		CRect rcClient;
+		GetClientRect(&rcClient);
+		for (; i < nCount; ++i) {
+			if (m_items[i].m_fsState & TCISTATE_LINEBREAK) {
+				++m_tabGroupIndexOnRClick;
+
+				CRect rcGroup;
+				rcGroup.top = offsetY;
+				rcGroup.left = 0;
+				rcGroup.right = rcClient.right;
+				rcGroup.bottom = m_items[i].m_rcItem.bottom;
+				offsetY = rcGroup.bottom;
+				if (rcGroup.PtInRect(point)) {
+					break;
+				}
+			} else if ((i + 1) == nCount && m_tabGroupIndexOnRClick >= 0) {
+				++m_tabGroupIndexOnRClick;
+			}
+		}
+		enum { kTabGroupMenuIndex = 3 };
+		if (m_tabGroupIndexOnRClick == -1) {
+			menu.EnableMenuItem(kTabGroupMenuIndex, MF_BYPOSITION | MF_GRAYED);
+		} else {
+			menu.EnableMenuItem(kTabGroupMenuIndex, MF_BYPOSITION | MF_ENABLED);
+		}
+
 		m_tipHistroy.SetWindowPos(HWND_TOPMOST, -1, -1, -1, -1, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
 
 		CToolInfo	tinfo(TTF_SUBCLASS | TTF_TRACK, m_hWnd, 0, NULL, _T(""));
@@ -1981,7 +1991,6 @@ void	CDonutTabBar::OnRButtonUp(UINT nFlags, CPoint point)
 		m_tipHistroy.Popup();
 
 		m_tipHistroy.Activate(TRUE);
-		CMenuHandle menu = m_menuPopup.GetSubMenu(1);
 		ClientToScreen(&point);
 		menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_LEFTBUTTON,
 							point.x, point.y, m_hWnd);
@@ -2104,6 +2113,10 @@ void	CDonutTabBar::OnTimer(UINT_PTR nIDEvent)
 {
 	if (nIDEvent == AutoSaveTimerID) {
 		SaveAllTab();
+	} else if (nIDEvent == RestoreScrollPosTimerID) {
+		KillTimer(RestoreScrollPosTimerID);
+		_RestoreSelectedIndex();
+		//_RestoreSelectedIndex();
 	} else {
 		SetMsgHandled(FALSE);
 	}
@@ -2119,10 +2132,18 @@ BOOL	CDonutTabBar::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 			return 0;
 
 		int nNext;
-		if (zDelta > 0) {
+		if (zDelta > 0) {	// 前のタブ
 			nNext  = nIndex - 1 < 0 ? nCount - 1 : nIndex - 1;
-		} else {
+			if (GetItem(nNext).m_fsState & TCISTATE_LINEBREAK) {
+				--nIndex;
+				nNext = nIndex - 1 < 0 ? nCount - 1 : nIndex - 1;
+			}
+		} else {	// 次のタブ
 			nNext  = (nIndex + 1 < nCount) ? nIndex + 1 : 0;
+			if (GetItem(nNext).m_fsState & TCISTATE_LINEBREAK) {
+				++nIndex;
+				nNext = (nIndex + 1 < nCount) ? nIndex + 1 : 0;
+			}
 		}
 		SetCurSel(nNext);
 	}
@@ -2207,6 +2228,25 @@ void	CDonutTabBar::OnOpenUpFolder(UINT uNotifyCode, int nID, CWindow wndCtl)
 	}
 }
 
+/// このタブからタブグループを作成
+void	CDonutTabBar::OnCreateTabGroup(UINT uNotifyCode, int nID, CWindow wndCtl)
+{
+	if (m_ClickedIndex == -1 || GetItemCount() <= 1) {
+		return;
+	}
+
+	CSimpleArray<int> arrCurMultiSel;
+	GetCurMultiSelEx(arrCurMultiSel, m_ClickedIndex);
+
+	MoveItems(0, arrCurMultiSel);
+
+	CTabItem item(L"<break>");
+	item.ModifyState(0, TCISTATE_LINEBREAK);
+	InsertItem(arrCurMultiSel.GetSize(), item);
+
+	_CorrectTabGroupBorder();
+}
+
 /// お気に入りに追加する
 void	CDonutTabBar::OnAddFavorites(UINT uNotifyCode, int nID, CWindow wndCtl)
 {
@@ -2236,8 +2276,17 @@ void	CDonutTabBar::OnNavigateLock(UINT uNotifyCode, int nID, CWindow wndCtl)
 /// オプションを開く
 void	CDonutTabBar::OnOpenOption(UINT uNotifyCode, int nID, CWindow wndCtl)
 {
+	bool bOldShowParentFoldreName = CTabBarConfig::s_bShowParentFolderNameIfSameName;
+
 	CExpTabBarOption	dlg;
 	dlg.Show(m_hWnd);
+
+	if (bOldShowParentFoldreName != CTabBarConfig::s_bShowParentFolderNameIfSameName) {
+		const int itemCount = GetItemCount();
+		for (int i = 0; i < itemCount; ++i) {
+			SetItemText(i, GetItemText(i));
+		}
+	}
 
 	_UpdateLayout();
 }
@@ -2254,7 +2303,22 @@ void	CDonutTabBar::OnClosedTabCreate(UINT uNotifyCode, int nID, CWindow wndCtl)
 	item.m_strFullPath	= m_vecHistoryItem[i].strFullPath;
 	item.m_pTravelLogBack	= new TRAVELLOG(*m_vecHistoryItem[i].pLogBack);
 	item.m_pTravelLogFore	= new TRAVELLOG(*m_vecHistoryItem[i].pLogFore);
-	AddTabItem(item);
+	//AddTabItem(item);
+	int insertIndex = -1;
+	const int itemCount = GetItemCount();
+	for (int i = GetCurSel(); i < itemCount; ++i) {
+		if (GetItem(i).m_fsState & TCISTATE_LINEBREAK) {
+			insertIndex = i;
+			break;
+		}
+	}
+	HICON hIcon = CreateIconFromIDList(item.m_pidl);
+	if (hIcon) {
+		item.m_nImgIndex = AddIcon(hIcon);
+	} else {
+		item.m_nImgIndex = 0;
+	}
+	InsertItem(insertIndex, item);
 
 	_DeleteHistory(i);
 }
@@ -2274,6 +2338,61 @@ void	CDonutTabBar::OnFavoritesOpen(UINT uNotifyCode, int nID, CWindow wndCtl)
 		return ;
 	}
 	OnTabCreate(pidl, true);
+}
+
+void CDonutTabBar::OnMoveTabGroup(UINT uNotifyCode, int nID, CWindow wndCtl)
+{
+	ATLASSERT(m_tabGroupIndexOnRClick != -1);
+
+	bool bMoveUp = ID_MOVEUP_TABGROUP == nID;
+	CSimpleArray<int> arrTabGroupIndexs;
+
+	int	i = CTabBarConfig::s_bMultiLine ? 0 : m_nFirstIndexOnSingleLine;
+	int nCount = GetItemCount();
+	int tabGroupIndex = 0;
+	int upGroupFrontIndex = -1;
+	int downGroupBottomIndex = -1;
+	int& insertPos = bMoveUp ? upGroupFrontIndex : downGroupBottomIndex;
+	for (; i < nCount; ++i) {
+		if (tabGroupIndex == m_tabGroupIndexOnRClick) {
+			arrTabGroupIndexs.Add(i);
+		} else if ((m_tabGroupIndexOnRClick - 1) == tabGroupIndex) {
+			if (upGroupFrontIndex == -1) {
+				upGroupFrontIndex = i;
+			}
+		} else if ((m_tabGroupIndexOnRClick + 1) == tabGroupIndex) {
+			downGroupBottomIndex = i + 1;
+		}
+
+		if (m_items[i].m_fsState & TCISTATE_LINEBREAK) {
+			++tabGroupIndex;
+		} else if ((i + 1) == nCount) {	// 最後のタブの時
+			if (tabGroupIndex == m_tabGroupIndexOnRClick) {	// ケツのタブグループを上に移動させるとき
+				// 最後のタブグループにはボーダーがないので追加しておく
+				if (insertPos != -1) {
+					CTabItem item(L"<break>");
+					item.ModifyState(0, TCISTATE_LINEBREAK);
+					InsertItem(nCount, item);
+
+					arrTabGroupIndexs.Add(nCount);
+				}
+			} else if ((m_tabGroupIndexOnRClick + 1) == tabGroupIndex) {	// ケツから一つ前のグループを下に移動させるとき)
+				// 最後のタブグループにはボーダーがないので追加しておく
+				if (!bMoveUp) {
+					CTabItem item(L"<break>");
+					item.ModifyState(0, TCISTATE_LINEBREAK);
+					InsertItem(nCount, item);
+
+					++downGroupBottomIndex;
+				}
+			}
+		}
+	}
+	ATLASSERT(arrTabGroupIndexs.GetSize() > 0);
+	if (insertPos != -1) {
+		MoveItems(insertPos, arrTabGroupIndexs);
+	}	
+
 }
 
 LRESULT CDonutTabBar::OnTooltipGetDispInfo(int idCtrl, LPNMHDR pnmh, BOOL& bHandled)
@@ -2296,77 +2415,62 @@ void CDonutTabBar::_SaveSelectedIndex(int nIndex)
 	if (SUCCEEDED(hr) && nIndex != -1) {
 		hr = spShellView->GetWindow(&hWnd);
 		if (SUCCEEDED(hr)) {
-			ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
-			if (ListView.m_hWnd != NULL) {
-				CComQIPtr<IFolderView2> spFolderView = spShellView;
+			CComQIPtr<IFolderView2> spFolderView = spShellView;
+			if (spFolderView) {
 				UINT viewMode = 0;
 				spFolderView->GetCurrentViewMode(&viewMode);
-				if (viewMode == FVM_ICON) {
-#if 0	// 重かったのでやめた
-					try {
-						HRESULT	hr;
-						CComPtr<IUIAutomation>	spUIAutomation;
-						hr = CoCreateInstance(__uuidof(CUIAutomation), NULL, CLSCTX_INPROC_SERVER, __uuidof(IUIAutomation), (void**)&spUIAutomation);
-						ATLASSERT(spUIAutomation);
-
-						CComPtr<IUIAutomationElement>	spUIElement;
-						hr = spUIAutomation->ElementFromHandle(ListView.m_hWnd, &spUIElement);
-						if (FAILED(hr))
-							AtlThrow(hr);
-
-						VARIANT varProp;
-						varProp.vt = VT_BOOL;
-						varProp.boolVal = VARIANT_FALSE;
-						CComPtr<IUIAutomationCondition>	spCondition1;
-						hr = spUIAutomation->CreatePropertyCondition(UIA_IsOffscreenPropertyId, varProp, &spCondition1);
-						if (FAILED(hr))
-							AtlThrow(hr);
-
-						varProp.vt = VT_I4;
-						varProp.intVal = UIA_ListItemControlTypeId;
-						CComPtr<IUIAutomationCondition>	spCondition2;
-						hr = spUIAutomation->CreatePropertyCondition(UIA_ControlTypePropertyId, varProp, &spCondition2);
-						if (FAILED(hr))
-							AtlThrow(hr);
-
-						CComPtr<IUIAutomationCondition>	spCondition3;
-						spUIAutomation->CreateAndCondition(spCondition1, spCondition2, &spCondition3);
-
-						CComPtr<IUIAutomationElementArray>	spElmArray;
-						hr = spUIElement->FindAll(TreeScope_Children, spCondition3, &spElmArray);
-						if (spElmArray == NULL)
-							AtlThrow(hr);
-
-						int nLength = 0;
-						hr = spElmArray->get_Length(&nLength);
-						if (nLength == 0)
-							AtlThrow(hr);
-						CComPtr<IUIAutomationElement>	spUIVisible;
-						hr = spElmArray->GetElement(nLength - 1, &spUIVisible);
-						if (spUIVisible == nullptr)
-							AtlThrow(hr);
-
-						SAFEARRAY*	pRuntimeId = nullptr;
-						hr = spUIVisible->GetRuntimeId(&pRuntimeId);
-						if (pRuntimeId == nullptr)
-							AtlThrow(hr);
-						LONG indicate = 3;
-						LONG runtimeIndex = 0;
-						hr = SafeArrayGetElement(pRuntimeId, &indicate, (void*)&runtimeIndex);
-						if (FAILED(hr))
-							AtlThrow(hr);
-
-						SetItemSelectedIndex(nIndex, runtimeIndex);
-					} catch (...) {
-						SetItemSelectedIndex(nIndex, 0);
+				ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
+				if (ListView == NULL) {
+					HWND hwndUIItemsView = ::GetWindow(hWnd, GW_CHILD);
+					if (hwndUIItemsView) {
+						double scrollPercent = m_UIAWrapper.GetUIItemsViewVerticalScrollPercent(hwndUIItemsView);
+						// INT_MAX -> 2147483647 : 10桁
+						// double 100.0 * 10000000 = 1000000000 : 10桁
+						int scrollPercentInt = static_cast<int>(scrollPercent * 10000000);
+						SetItemSelectedIndex(nIndex, scrollPercentInt);
 					}
-					//int nVisibleIndex = 0;
-					//spFolderView->GetVisibleItem(0, TRUE, &nVisibleIndex);
-					//SetItemSelectedIndex(nIndex, nVisibleIndex);
-#endif
 				} else {
-					SetItemSelectedIndex(nIndex, ListView.GetTopIndex());
+					if (viewMode == FVM_ICON) {
+						int scrollPos2 = m_UIAWrapper.GetScrollPos(ListView.m_hWnd);
+						SetItemSelectedIndex(nIndex, scrollPos2);
+					} else {
+						SetItemSelectedIndex(nIndex, ListView.GetTopIndex());
+					}
 				}
+			}
+		}
+	}
+}
+
+void	CDonutTabBar::_RestoreSelectedIndex()
+{
+	CListViewCtrl ListView;
+	HWND hWnd;
+	CComPtr<IShellView>	spShellView;
+	HRESULT hr = m_spShellBrowser->QueryActiveShellView(&spShellView);
+	if (SUCCEEDED(hr)) {
+		hr = spShellView->GetWindow(&hWnd);
+		if (SUCCEEDED(hr)) {
+			CComQIPtr<IFolderView2>	spFolderView = spShellView;
+			if (spFolderView) {
+				UINT viewMode = 0;
+				spFolderView->GetCurrentViewMode(&viewMode);
+				ListView = ::FindWindowEx(hWnd, NULL, _T("SysListView32"), NULL);
+				if (ListView == NULL) {
+					HWND hwndUIItemsView = ::GetWindow(hWnd, GW_CHILD);
+					if (hwndUIItemsView) {
+						double selectedIndex = GetItemSelectedIndex(GetCurSel());
+						double scrollPercent = selectedIndex / 10000000;
+						m_UIAWrapper.SetUIItemsViewVerticalScrollPercent(hwndUIItemsView, scrollPercent);
+					}
+				} else {
+					if (viewMode == FVM_ICON) {
+						m_UIAWrapper.SetScrollPos(ListView, GetItemSelectedIndex(GetCurSel()));
+					} else {
+						int nPerPage = ListView.GetCountPerPage();
+						ListView.EnsureVisible(GetItemSelectedIndex(GetCurSel()) + nPerPage - 1, FALSE);
+					}
+				} 
 			}
 		}
 	}
@@ -2397,11 +2501,11 @@ void	CDonutTabBar::_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObjec
 			CString strLinkPath;
 			strLinkPath.Format(_T("%s\\%s.lnk"), strTargetFolder, strLinkName);
 			ShellWrap::CreateLinkFile(pidl, strLinkPath);
-			::ILFree(pidl);
+			::CoTaskMemFree(pidl);
 		}
 	} else {
 		std::for_each(vecIDList.begin(), vecIDList.end(), [](LPITEMIDLIST pidl) {
-			::ILFree(pidl);
+			::CoTaskMemFree(pidl);
 		});
 
 		HRESULT	hr;

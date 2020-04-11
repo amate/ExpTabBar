@@ -71,6 +71,8 @@ enum ETcistate {
 	TCISTATE_MOUSEAWAYCAPTURED	= 0x080,	 // mouse away but captured
 
 	TCISTATE_NAVIGATELOCK		= 0x100,
+
+	TCISTATE_LINEBREAK			= 0x200,	// タブグループの改行位置
 };
 
 // Command ID
@@ -95,7 +97,7 @@ class CTabSkin
 
 	enum { s_kcxIconGap = 5 };
 
-private:
+protected:
 	CFont		m_font;
 
 	COLORREF	m_colText;
@@ -113,6 +115,9 @@ protected:
 	CTabSkin() { _LoadTabTextSetting(); _LoadImage(); }
 public:
 	virtual ~CTabSkin() { m_imgLock.Destroy(); }
+
+	virtual void DrawBackground(CDCHandle dc, const CRect& rcClient) {};
+	virtual void DrwaBreakLineBorder(CDCHandle dc, const CRect& rcBorlder) {};
 
 	void	Update(CDCHandle dc, HIMAGELIST hImgList, const CTabItem& item, bool bAnchorColor);
 
@@ -146,9 +151,46 @@ public:
 	CTabSkinTheme(CTheme& theme);
 
 private:
-	void	_DrawSkinCur(CDCHandle dc, CRect rcItem);
-	void	_DrawSkinNone(CDCHandle dc, CRect rcItem);
-	void	_DrawSkinSel(CDCHandle dc, CRect rcItem);
+	enum ThemeColor {
+		kBreakLineBorder = RGB(0xcc, 0xcc, 0xcc),
+	};
+
+	virtual void DrwaBreakLineBorder(CDCHandle dc, const CRect& rcBorlder) override;
+
+	virtual void	_DrawSkinCur(CDCHandle dc, CRect rcItem) override;
+	virtual void	_DrawSkinNone(CDCHandle dc, CRect rcItem) override;
+	virtual void	_DrawSkinSel(CDCHandle dc, CRect rcItem) override;
+};
+
+////////////////////////////////////////////////////////////////////////////
+// CTabSkinDarkTheme
+
+class CTabSkinDarkTheme : public CTabSkin
+{
+public:
+	// コンストラクタ
+	CTabSkinDarkTheme();
+
+	static bool	IsDarkMode();
+
+private:
+	enum DarkThemeColor {
+		kText = RGB(0xFF, 0xFF, 0xFF),	// whilte
+		kBG = RGB(0, 0, 0),
+		kNormalBG = RGB(0, 0, 0),
+		kSelectedBG = RGB(77, 77, 77),
+		kHotBG = RGB(0x77, 0x77, 0x77),
+		kEdge = RGB(0x53, 0x53, 0x53),
+		kBreakLineBorder = RGB(0x53, 0x53, 0x53),
+	};
+	CPen	m_penEdge;
+
+	virtual void DrawBackground(CDCHandle dc, const CRect& rcClient) override;
+	virtual void DrwaBreakLineBorder(CDCHandle dc, const CRect& rcBorlder) override;
+
+	virtual void	_DrawSkinCur(CDCHandle dc, CRect rcItem) override;
+	virtual void	_DrawSkinNone(CDCHandle dc, CRect rcItem) override;
+	virtual void	_DrawSkinSel(CDCHandle dc, CRect rcItem) override;
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -170,9 +212,9 @@ private:
 
 	void	_DrawSkin(HDC hDC, CRect rcItem, CBitmap& pBmp);
 
-	void	_DrawSkinCur(CDCHandle dc, CRect rcItem);
-	void	_DrawSkinNone(CDCHandle dc, CRect rcItem);
-	void	_DrawSkinSel(CDCHandle dc, CRect rcItem);
+	virtual void	_DrawSkinCur(CDCHandle dc, CRect rcItem) override;
+	virtual void	_DrawSkinNone(CDCHandle dc, CRect rcItem) override;
+	virtual void	_DrawSkinSel(CDCHandle dc, CRect rcItem) override;
 };
 
 

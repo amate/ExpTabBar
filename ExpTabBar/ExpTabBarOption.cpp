@@ -30,16 +30,18 @@ bool	CTabBarConfig::s_bLinkActive		= false;
 bool	CTabBarConfig::s_bWheel				= false;
 bool	CTabBarConfig::s_bMultiLine			= true;
 bool	CTabBarConfig::s_bUseFixedSize		= false;
-CSize	CTabBarConfig::s_FixedSize(100, 24);
+CSize	CTabBarConfig::s_FixedSize(120, 24);
 int		CTabBarConfig::s_nMaxTextLength		= 30;
 int		CTabBarConfig::s_RClickCommand		= SHOWMENU;
-int		CTabBarConfig::s_DblClickCommand	= TABCLOSE;
+int		CTabBarConfig::s_DblClickCommand	= OPEN_UPFOLDER;
 int		CTabBarConfig::s_MClickCommand		= TABCLOSE;
 int		CTabBarConfig::s_nMaxHistoryCount	= 16;
 bool	CTabBarConfig::s_bMargeControlPanel = false;
-bool	CTabBarConfig::s_bNoFullRowSelect	= true;
+bool	CTabBarConfig::s_bNoFullRowSelect	= false;
 bool	CTabBarConfig::s_bAddressBarNewTabOpen = false;
 bool	CTabBarConfig::s_bAlwaysShowColumHeaders = false;
+bool	CTabBarConfig::s_bUseAPIHook		= false;
+bool	CTabBarConfig::s_bShowParentFolderNameIfSameName = false;
 
 /// 設定を読み込む
 void	CTabBarConfig::LoadConfig()
@@ -84,6 +86,10 @@ void	CTabBarConfig::LoadConfig()
 		s_bAddressBarNewTabOpen	= value.get();
 	if (auto value = pt.get_optional<bool>("Tab.AlwaysShowColumHeaders"))
 		s_bAlwaysShowColumHeaders = value.get();
+	if (auto value = pt.get_optional<bool>("Tab.UseAPIHook"))
+		s_bUseAPIHook = value.get();
+	if (auto value = pt.get_optional<bool>("Tab.ShowParentFolderNameIfSameName"))
+		s_bShowParentFolderNameIfSameName = value.get();
 }
 
 /// 設定を保存する
@@ -112,6 +118,8 @@ void	CTabBarConfig::SaveConfig()
 	pt.put("Tab.NoFullRowSelect"	, s_bNoFullRowSelect);
 	pt.put("Tab.AddressBarNewTabOpen", s_bAddressBarNewTabOpen);
 	pt.put("Tab.AlwaysShowColumHeaders", s_bAlwaysShowColumHeaders);
+	pt.put("Tab.UseAPIHook", s_bUseAPIHook);
+	pt.put("Tab.ShowParentFolderNameIfSameName", s_bShowParentFolderNameIfSameName);
 
 	std::ofstream iniostream(g_szIniFileName);
 	write_ini(iniostream, pt);
@@ -153,6 +161,8 @@ public:
 		DDX_CHECK(IDC_CHECK_NOFULLROWSELECT		, s_bNoFullRowSelect	)
 		DDX_CHECK(IDC_CHECK_ADDRESSBAR_NEWTABOPEN, s_bAddressBarNewTabOpen)
 		DDX_CHECK(IDC_CHECK_ALWAYS_SHOWCOLUMHEADERS, s_bAlwaysShowColumHeaders)
+		DDX_CHECK(IDC_CHECK_USE_APIHOOK			, s_bUseAPIHook)
+		DDX_CHECK(IDC_CHECK_SHOWPARENTFOLDERNAME_IF_SAMENAME, s_bShowParentFolderNameIfSameName)
     END_DDX_MAP()
 	
 
@@ -208,7 +218,7 @@ public:
 	BOOL OnApply()
 	{
 		if (!DoDataExchange(DDX_SAVE))
-			return FALSE;
+			return PSNRET_INVALID;
 
 		s_nAddPos	= m_cmbAddPos.GetCurSel();
 		s_bLeftActiveOnClose	= m_cmbPosOnClose.GetCurSel() == 0;
@@ -219,7 +229,7 @@ public:
 		
 		SaveConfig();	/* 保存 */
 
-		return TRUE;
+		return PSNRET_NOERROR;
 	}
 
 private:
@@ -236,9 +246,9 @@ private:
 
 // 定義
 bool	CThumbnailTooltipConfig::s_bUseThumbnailTooltip = false;
-CSize	CThumbnailTooltipConfig::s_MaxThumbnailSize(512, 256);
+CSize	CThumbnailTooltipConfig::s_MaxThumbnailSize(800, 800);
 int		CThumbnailTooltipConfig::s_nMaxThumbnailCache = 64;
-int		CThumbnailTooltipConfig::s_nMaxPreCache = 0;
+int		CThumbnailTooltipConfig::s_nMaxPreCache = 10;
 bool	CThumbnailTooltipConfig::s_bShowThumbnailOnAlt = false;
 
 bool	CThumbnailTooltipConfig::s_bMaxThumbnailSizeChanged = false;
@@ -325,14 +335,14 @@ public:
 	{
 		CSize prevSize = s_MaxThumbnailSize;
 		if (!DoDataExchange(DDX_SAVE))
-			return FALSE;
+			return PSNRET_INVALID;
 
 		if (prevSize != s_MaxThumbnailSize)
 			s_bMaxThumbnailSizeChanged	= true;	// キャッシュのクリアを促す
 
 		SaveConfig();	/* 保存 */
 
-		return TRUE;
+		return PSNRET_NOERROR;
 	}
 
     void OnDataValidateError(UINT nCtrlID, BOOL bSave, _XData& data)
@@ -374,7 +384,7 @@ void	CFavoritesOption::CleanFavoritesItem()
 {
 	for (auto it = s_vecFavoritesItem.begin(); it != s_vecFavoritesItem.end(); ++it) {
 		if (it->pidl)
-			::ILFree(it->pidl);
+			::CoTaskMemFree(it->pidl);
 		if (it->bmpIcon)
 			it->bmpIcon.DeleteObject();
 	}
@@ -472,7 +482,6 @@ public:
 		DDX_TEXT(IDC_EDIT_TITLE	, m_strTitle)
 		DDX_TEXT(IDC_EDIT_PATH	, m_strPath)
     END_DDX_MAP()
-	
 
 	// Message map
 	BEGIN_MSG_MAP_EX( CFavoritesPropertyPage )
@@ -499,11 +508,11 @@ public:
 	BOOL OnApply()
 	{
 		if (!DoDataExchange(DDX_SAVE))
-			return FALSE;
+			return PSNRET_INVALID;
 
 		SaveConfig();	/* 保存 */
 
-		return TRUE;
+		return PSNRET_NOERROR;
 	}
 
 	void OnListSelChange(UINT uNotifyCode, int nID, CWindow wndCtl)
@@ -565,7 +574,7 @@ public:
 		if (s_vecFavoritesItem[nIndex].bmpIcon) 
 			s_vecFavoritesItem[nIndex].bmpIcon.DeleteObject();
 		if (s_vecFavoritesItem[nIndex].pidl)
-			::ILFree(s_vecFavoritesItem[nIndex].pidl);
+			::CoTaskMemFree(s_vecFavoritesItem[nIndex].pidl);
 		s_vecFavoritesItem.erase(s_vecFavoritesItem.begin() + nIndex);
 
 		m_ListFavorites.DeleteString(nIndex);
@@ -652,6 +661,9 @@ INT_PTR	CExpTabBarOption::Show(HWND hWndParent)
 {
 	CString strTitle;
 	strTitle.Format(_T("ExpTabBar - version %s"), EXPTABBARVERSION);
+#ifdef _DEBUG
+	strTitle += L" [Debug]";
+#endif
 	SetTitle(strTitle);
 	m_psh.dwFlags |= PSH_NOAPPLYNOW | PSH_NOCONTEXTHELP;
 

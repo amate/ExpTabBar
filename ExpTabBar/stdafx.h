@@ -24,7 +24,6 @@
 #include <vector>
 #include <algorithm>
 #include <thread>
-using namespace std::placeholders;
 
 //////////////////////////////////
 // boost

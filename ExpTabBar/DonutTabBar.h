@@ -5,55 +5,9 @@
 #include "OleDragDropTabCtrl.h"
 #include "HlinkDataObject.h"
 #include "..\APIHook\OpenFolderAndSelectItems.h"
-
-#define	WM_ISMARGECONTROLPANEL	(WM_APP + 1)
-
-
-// Forward Declare
-class CDonutTabBar;
-
-////////////////////////////////////////////////////////////
-// CNotifyWindow	: 通知用のダミーのウィンドウ
-
-class CNotifyWindow : public CFrameWindowImpl<CNotifyWindow>
-{
-public:
-	DECLARE_FRAME_WND_CLASS(_T("ExpTabBar_NotifyWindow"), NULL)
-
-	// Constructor
-	CNotifyWindow(CDonutTabBar* p);
-
-	BEGIN_MSG_MAP_EX( CNotifyWindow )
-		MSG_WM_CREATE(OnCreate)
-		MSG_WM_DESTROY(OnDestroy)
-		MSG_WM_COPYDATA( OnCopyData )
-		MESSAGE_HANDLER_EX(WM_ISMARGECONTROLPANEL, OnIsMargeControlPanel)
-		//CHAIN_MSG_MAP( CFrameWindowImpl<CNotifyWindow> )
-	END_MSG_MAP()
-
-	int OnCreate(LPCREATESTRUCT lpCreateStruct);
-	void OnDestroy();
-	BOOL OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct);
-	LRESULT OnIsMargeControlPanel(UINT uMsg, WPARAM wParam, LPARAM lParam);
-
-private:
-	CDonutTabBar*	m_pTabBar;
-
-	HANDLE	m_hEventAPIHookTrapper;
-	HANDLE	m_hEventAPIHookTrapper64;
-	HANDLE	m_hJob;
-};
-
-
-
-
-// A_ONはGetLinkStateで消されるB_ONは残る
-enum ELinkState {
-	LINKSTATE_OFF		= 0,
-	LINKSTATE_A_ON		= 1,
-	LINKSTATE_B_ON		= 2,
-};
-
+#include "SharedMemoryUtil.h"
+#include "NotifyWindow.h"
+#include "UIAWrapper.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // CDonutTabBar
@@ -64,7 +18,14 @@ public:
 	DECLARE_WND_CLASS_EX(_T("DonutTabBarCtrl"), CS_DBLCLKS, COLOR_BTNFACE)
 
 	// Constants
-	enum { AutoSaveTimerID = 1, AutoSaveInterval =  60 * 1000 };
+	enum { 
+		AutoSaveTimerID = 1, 
+		AutoSaveInterval =  60 * 1000,
+		RestoreScrollPosTimerID = 2,
+	};
+
+	LPCWSTR kCurrentPIDLMutexName = L"ExpTabBar_CurrentPIDLMutex";
+	LPCWSTR kCurrentPIDLSharedName = L"ExpTabBar_CurrentPIDL";
 
 	// コンストラクタ
 	CDonutTabBar();
@@ -120,11 +81,13 @@ public:
 		COMMAND_ID_HANDLER_EX( ID_LEFTALLCLOSE		, OnLeftAllClose )
 		COMMAND_ID_HANDLER_EX( ID_EXCEPTCURTABCLOSE	, OnExceptCurTabClose )
 		COMMAND_ID_HANDLER_EX( ID_OPEN_UPFOLDER		, OnOpenUpFolder )
+		COMMAND_ID_HANDLER_EX( ID_CREATE_TABGROUP	, OnCreateTabGroup)
 		COMMAND_ID_HANDLER_EX( ID_ADD_FAVORITES		, OnAddFavorites )
 		COMMAND_ID_HANDLER_EX( ID_NAVIGATELOCK		, OnNavigateLock )
 		COMMAND_ID_HANDLER_EX( ID_OPTION			, OnOpenOption )
 		COMMAND_RANGE_HANDLER_EX( ID_RECENTCLOSED_FIRST, ID_RECENTCLOSED_LAST, OnClosedTabCreate )
 		COMMAND_RANGE_HANDLER_EX( ID_FAVORITES_FIRST	, ID_FAVORITES_LAST, OnFavoritesOpen )
+		COMMAND_RANGE_HANDLER_EX(ID_MOVEUP_TABGROUP, ID_MOVEDOWN_TABGROUP, OnMoveTabGroup)
 		NOTIFY_CODE_HANDLER( TTN_GETDISPINFO, OnTooltipGetDispInfo )
 		CHAIN_MSG_MAP( COleDragDropTabCtrl<CDonutTabBar> )
 		CHAIN_MSG_MAP_ALT_MEMBER((*m_pExpTabBandMessageMap), 5)
@@ -138,7 +101,6 @@ public:
 	void	OnMenuSelect(UINT nItemID, UINT nFlags, CMenuHandle menu);
 	void	OnLButtonDblClk(UINT nFlags, CPoint point);
 	void	OnMButtonUp(UINT nFlags, CPoint point);
-	LRESULT OnNewTabButton(UINT uMsg, WPARAM wParam, LPARAM lParam);
 	void	OnTimer(UINT_PTR nIDEvent);
 	BOOL	OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
 
@@ -148,11 +110,13 @@ public:
 	void	OnLeftAllClose(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnExceptCurTabClose(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnOpenUpFolder(UINT uNotifyCode, int nID, CWindow wndCtl);
+	void	OnCreateTabGroup(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnAddFavorites(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnNavigateLock(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnOpenOption(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnClosedTabCreate(UINT uNotifyCode, int nID, CWindow wndCtl);
 	void	OnFavoritesOpen(UINT uNotifyCode, int nID, CWindow wndCtl);
+	void	OnMoveTabGroup(UINT uNotifyCode, int nID, CWindow wndCtl);
 
 	LRESULT OnTooltipGetDispInfo(int idCtrl, LPNMHDR pnmh, BOOL& bHandled);
 
@@ -177,6 +141,7 @@ private:
 	void	_ClearSearchText();
 	
 	void	_SaveSelectedIndex(int nIndex);
+	void	_RestoreSelectedIndex();
 
 	void	_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObject*	pDataObject, bool bMove);
 
@@ -220,18 +185,23 @@ private:
 			, pLogFore(NULL)
 			, hbmp(NULL) { }
 	};
-
-
 	vector<HistoryItem>	m_vecHistoryItem;
 	CMenuHandle			m_menuHistory;
 	CMenuHandle			m_menuFavorites;
 	CToolTipCtrl	m_tipHistroy;
+	int				m_tabGroupIndexOnRClick;
 
 	HWND			m_hSearch;
 
 	CNotifyWindow	m_wndNotify;
 	int				m_nInsertIndex;
 	boost::optional<OpenFolderAndSelectItems> m_folderAndSelectItems;
+
+
+	CSharedMemory	m_currentPIDL;
+	CMutex			m_mutex_currentPIDL;
+
+	UIAWrapper		m_UIAWrapper;
 };
 
 

@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -21,32 +21,34 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{7158FD40-539F-475E-909E-CB03CB0E0B3E}</ProjectGuid>
     <Keyword>AtlProj</Keyword>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <TargetFrameworkVersion>
+    </TargetFrameworkVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfAtl>Dynamic</UseOfAtl>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|X64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfAtl>Dynamic</UseOfAtl>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfAtl>Static</UseOfAtl>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140_xp</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|X64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfAtl>Static</UseOfAtl>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -95,6 +97,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -131,6 +134,7 @@
       <PreprocessorDefinitions>WIN64;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -171,18 +175,18 @@
       <Message>エクスプローラーを終了させる $(SolutionDir)ExplorerClose.exe</Message>
     </PreBuildEvent>
     <PreLinkEvent>
-      <Command>
-      </Command>
+      <Command>xcopy "$(SolutionDir)UIA\bin\Debug\x64\UIA.dll" "$(SolutionDir)DebugX64\" /Y</Command>
     </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>MaxSpeed</Optimization>
       <PreprocessorDefinitions>WIN32;_WINDOWS;NDEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -217,14 +221,14 @@
       <Message>エクスプローラーを終了させる</Message>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>copy $(SolutionDir)Release\ExpTabBar.dll $(SolutionDir)Release\ExpTabBar\</Command>
+      <Command>copy "$(SolutionDir)Release\ExpTabBar.dll" "$(SolutionDir)_うｐ\ExpTabBar\x86"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|X64'">
     <ClCompile>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>MaxSpeed</Optimization>
       <PreprocessorDefinitions>WIN64;_WINDOWS;NDEBUG;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -263,10 +267,11 @@
       <Message>エクスプローラーを終了させる</Message>
     </PreBuildEvent>
     <PostBuildEvent>
-      <Command>copy $(SolutionDir)ReleaseX64\ExpTabBar.dll $(SolutionDir)ReleaseX64\64ExpTabBar\</Command>
+      <Command>copy $(SolutionDir)ReleaseX64\ExpTabBar.dll $(SolutionDir)_うｐ\ExpTabBar\x64\</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CodeConvert.cpp" />
     <ClCompile Include="DataObject.cpp" />
     <ClCompile Include="dllmain.cpp">
       <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</CompileAsManaged>
@@ -305,6 +310,7 @@
     <ClCompile Include="IniFile.cpp" />
     <ClCompile Include="Logger.cpp" />
     <ClCompile Include="Misc.cpp" />
+    <ClCompile Include="NotifyWindow.cpp" />
     <ClCompile Include="ShellWrap.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -315,9 +321,11 @@
     <ClCompile Include="TabCtrl.cpp" />
     <ClCompile Include="TabCtrlImpl.cpp" />
     <ClCompile Include="ThumbnailTooltip.cpp" />
+    <ClCompile Include="UIAWrapper.cpp" />
     <ClCompile Include="XmlFile.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CodeConvert.h" />
     <ClInclude Include="DataObject.h" />
     <ClInclude Include="dllmain.h" />
     <ClInclude Include="DonutFunc.h" />
@@ -331,14 +339,17 @@
     <ClInclude Include="Logger.h" />
     <ClInclude Include="Misc.h" />
     <ClInclude Include="MtlDragDrop.h" />
+    <ClInclude Include="NotifyWindow.h" />
     <ClInclude Include="OleDragDropTabCtrl.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="SharedMemoryUtil.h" />
     <ClInclude Include="ShellWrap.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="TabCtrl.h" />
     <ClInclude Include="TabCtrlImpl.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="ThumbnailTooltip.h" />
+    <ClInclude Include="UIAWrapper.h" />
     <ClInclude Include="Version.h" />
     <ClInclude Include="XmlFile.h" />
   </ItemGroup>
@@ -346,9 +357,11 @@
     <ResourceCompile Include="ExpTabBar.rc" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="cpp.hint" />
     <None Include="ExpTabBand.rgs" />
     <None Include="ExpTabBar.def" />
     <None Include="ExpTabBar.rgs" />
+    <None Include="packages.config" />
     <None Include="ReadMe.txt" />
     <None Include="res\folder_open.ico" />
     <None Include="res\NavigateLock.ico" />
@@ -358,10 +371,17 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\nlohmann.json.3.7.3\build\native\nlohmann.json.targets" Condition="Exists('..\packages\nlohmann.json.3.7.3\build\native\nlohmann.json.targets')" />
   </ImportGroup>
   <ProjectExtensions>
     <VisualStudio>
       <UserProperties RESOURCE_FILE="ExpTabBar.rc" />
     </VisualStudio>
   </ProjectExtensions>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>このプロジェクトは、このコンピューター上にない NuGet パッケージを参照しています。それらのパッケージをダウンロードするには、[NuGet パッケージの復元] を使用します。詳細については、http://go.microsoft.com/fwlink/?LinkID=322105 を参照してください。見つからないファイルは {0} です。</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\nlohmann.json.3.7.3\build\native\nlohmann.json.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\nlohmann.json.3.7.3\build\native\nlohmann.json.targets'))" />
+  </Target>
 </Project>

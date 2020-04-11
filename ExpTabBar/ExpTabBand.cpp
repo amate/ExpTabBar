@@ -313,6 +313,10 @@ void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
 
 					_TrackMouseLeave(m_ListView);
 					_TrackMouseHover(m_ListView);
+
+					if (CTabSkinDarkTheme::IsDarkMode()) {
+						m_ListView.SetTextColor(0xFFFFFF);
+					}
 				} else {
 					HWND hWndDirectUI = ::FindWindowEx(hWnd, NULL, _T("DirectUIHWND"), NULL);
 					if (hWndDirectUI) {
@@ -530,9 +534,11 @@ void	CExpTabBand::OnListViewKeyUp(UINT nChar, UINT nRepCnt, UINT nFlags)
 		_HideThumbnailTooltip();
 		return ;
 	}
-	::GetCursorPos(&m_ptLastForMouseMove);
-	if (!_ShowThumbnailTooltip(nIndex, rcItem)) {
-		_HideThumbnailTooltip();
+	if (m_ThumbnailTooltip.IsShowThumbnailTooltip()) {
+		::GetCursorPos(&m_ptLastForMouseMove);
+		if (!_ShowThumbnailTooltip(nIndex, rcItem)) {
+			_HideThumbnailTooltip();
+		}
 	}
 }
 
@@ -635,7 +641,7 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 			LPITEMIDLIST	pidlLink = ShellWrap::GetResolveIDList(pidlSelectedItem);
 			if (pidlLink) {
 				m_wndTabBar.OnTabCreate(pidlLink, false, false, true);
-				::ILFree(pidlSelectedItem);
+				::CoTaskMemFree(pidlSelectedItem);
 				pidlSelectedItem = nullptr;
 			}
 		} else {
@@ -657,12 +663,12 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 			if (IsExistFolderFromIDList(pidlSelectedItem)) {
 				m_wndTabBar.OnTabCreate(pidlSelectedItem, false, false, true);
 			} else {
-				::ILFree(pidlSelectedItem);
+				::CoTaskMemFree(pidlSelectedItem);
 			}
 		}
 
-		::ILFree(pidlFolder);
-		::ILFree(pidlChild);
+		::CoTaskMemFree(pidlFolder);
+		::CoTaskMemFree(pidlChild);
 	}
 }
 
@@ -694,10 +700,10 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 						vec.push_back(strPath);
 					}
 				}
-				::ILFree(pidl);
-				::ILFree(pidlChild);
+				::CoTaskMemFree(pidl);
+				::CoTaskMemFree(pidlChild);
 			}
-			::ILFree(pidlFolder);
+			::CoTaskMemFree(pidlFolder);
 
 			m_ThumbnailTooltip.LockImageCache();
 			//std::thread	td([this, vec]() {
@@ -747,7 +753,7 @@ void	CExpTabBand::OnExplorerActivate(UINT nState, BOOL bMinimized, CWindow wndOt
 void	CExpTabBand::OnExplorerDestroy()
 {
 	SetMsgHandled(FALSE);
-
+#if 0
 	OSVERSIONINFO	osvi = { sizeof(osvi) };
 	GetVersionEx(&osvi);
 	if (osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) {	// Win7
@@ -761,6 +767,7 @@ void	CExpTabBand::OnExplorerDestroy()
 			::CloseHandle(h);
 		}).detach();
 	}
+#endif
 }
 
 void	CExpTabBand::OnAddressBarProgressParentNotify(UINT message, UINT nChildID, LPARAM lParam)
@@ -919,6 +926,9 @@ CRect	CExpTabBand::_GetItemRect(int nIndex)
 
 bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem, bool bForceShow /*= false*/)
 {
+	if (!CThumbnailTooltipConfig::s_bUseThumbnailTooltip) {
+		return false;
+	}
 	//SetLayeredWindowAttributes(m_pThumbnailTooltip->m_hWnd, 0, 255, LWA_ALPHA);
 	//m_pThumbnailTooltip->ShowWindow(TRUE);
 
@@ -932,7 +942,7 @@ bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem, bool bForceSho
 	}
 
 	CString path = ShellWrap::GetFullPathFromIDList(pidl);
-	::ILFree(pidl);
+	::CoTaskMemFree(pidl);
 	if (IsImageFile(path)) {
 		m_nIndexTooltip = nIndex;
 		m_wndShellView.ClientToScreen(&rcItem);
@@ -953,7 +963,7 @@ bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem, bool bForceSho
 							return;
 
 						CString path = ShellWrap::GetFullPathFromIDList(pidl);
-						::ILFree(pidl);
+						::CoTaskMemFree(pidl);
 						if (IsImageFile(path))
 							m_ThumbnailTooltip.AddThumbnailCache((LPCWSTR)path);
 					}
@@ -973,6 +983,10 @@ void	CExpTabBand::_HideThumbnailTooltip()
 	m_nIndexTooltip = -1;
 	if (m_Tooltip.IsWindow()) {
 		m_Tooltip.Activate(TRUE);
+	}
+
+	if (m_bWheelThumbnailView) {
+		m_bWheelThumbnailView = false;
 	}
 }
 
@@ -1009,7 +1023,7 @@ void	CExpTabBand::_SetNoFullRowSelect()
 	//	// "コンピューター"は一列表示にする
 	//	if (strURL == _T("::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"))
 	//		bNoFullRaw = false;
-	//	::ILFree(pidl);
+	//	::CoTaskMemFree(pidl);
 	//}
 	// "コンピューター"は一列表示にする
 	//if (strURL == _T("::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"))
@@ -1043,6 +1057,7 @@ void	CExpTabBand::_SetNoFullRowSelect()
 
 void	CExpTabBand::_RegisterExecuteCommandVerb(bool bRegister)
 {
+#if 0
 	OSVERSIONINFO	osvi = { sizeof(osvi) };
 	GetVersionEx(&osvi);
 	if ( !(osvi.dwMajorVersion == 6 && osvi.dwMinorVersion == 1) )	// Win7以外
@@ -1059,6 +1074,7 @@ void	CExpTabBand::_RegisterExecuteCommandVerb(bool bRegister)
 		if (rkFolderCommand.Open(HKEY_CURRENT_USER, _T("Software\\Classes\\Folder\\shell")) == ERROR_SUCCESS)
 			rkFolderCommand.RecurseDeleteKey(_T("open"));
 	}
+#endif
 }
 
 bool	CExpTabBand::_SubclassAddressBarProgress()

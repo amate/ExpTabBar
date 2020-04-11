@@ -76,6 +76,15 @@
     <ClCompile Include="Logger.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="CodeConvert.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="NotifyWindow.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="UIAWrapper.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="dllmain.h">
@@ -147,6 +156,18 @@
     <ClInclude Include="Logger.h">
       <Filter>ソース ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="SharedMemoryUtil.h">
+      <Filter>ソース ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="CodeConvert.h">
+      <Filter>ソース ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="NotifyWindow.h">
+      <Filter>ソース ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="UIAWrapper.h">
+      <Filter>ソース ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ExpTabBar.rc">
@@ -168,6 +189,10 @@
       <Filter>リソース ファイル</Filter>
     </None>
     <None Include="res\folder_open.ico">
+      <Filter>リソース ファイル</Filter>
+    </None>
+    <None Include="packages.config" />
+    <None Include="cpp.hint">
       <Filter>リソース ファイル</Filter>
     </None>
   </ItemGroup>

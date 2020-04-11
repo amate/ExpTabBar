@@ -12,6 +12,7 @@
 
 void	InstallRegKey()
 {
+#if 0
 	if (::GetAsyncKeyState(VK_CONTROL) < 0)
 		return;
 
@@ -178,10 +179,12 @@ void	InstallRegKey()
 		rk.SetDWORDValue(_T("GroupByKey:PID")	, 0);
 		rk.SetDWORDValue(_T("GroupByDirection")	, 1);
 	}
+#endif
 }
 
 void	UnInstallRegKey()
 {
+#if 0
 	{// [-HKEY_CURRENT_USER\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\Bags]
 		CRegKey rk;
 		rk.Open(HKEY_CURRENT_USER, _T("Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell"));
@@ -193,6 +196,7 @@ void	UnInstallRegKey()
 		rk.Open(HKEY_CURRENT_USER, _T("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced"));
 		rk.DeleteValue(_T("FullRowSelect"));
 	}
+#endif
 }
 
 // Used to determine whether the DLL can be unloaded by OLE.

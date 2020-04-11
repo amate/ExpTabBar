@@ -148,6 +148,9 @@ protected:
 		int	cyOffset = -1;
 		for (; i < GetItemCount(); ++i) {
 			const CRect &rcItem = GetItem(i).m_rcItem;
+			if (GetItem(i).m_fsState & TCISTATE_LINEBREAK) {
+				continue;
+			}
 
 			/* 左端のタブのインデックスと大きさを記憶する */
 			if (cyOffset != rcItem.top) {
@@ -288,6 +291,34 @@ protected:
 			return nIndex;
 		}
 #endif
+		// どのタブグループの範囲外に存在するか
+		{
+			int cyOffset = 0;
+			const int itemCount = GetItemCount();
+			for (int i = 0; i < itemCount; ++i) {
+				if (GetItem(i).m_fsState & TCISTATE_LINEBREAK) {
+					const CRect& rcItem = GetItem(i).m_rcItem;
+					CRect rcGroup;
+					rcGroup.top = cyOffset;
+					rcGroup.left = 0;
+					rcGroup.right = rcItem.right;
+					rcGroup.bottom = rcItem.bottom;
+					if (rcGroup.PtInRect(point)) {
+						int index = i - 1;
+						if (index == -1) {
+							flag = htInsetLeft;
+							return 0;
+						} else {
+							flag = htSeparator;
+							return index;
+						}
+					}
+					cyOffset = rcGroup.bottom;
+				}
+			}
+		}
+
+
 		// out side of items
 		flag = htOutside;
 		return -1;
@@ -324,7 +355,7 @@ public:
 			if (false/*GetTabCtrlExtendedStyle() & TAB2_EX_MOUSEDOWNSELECT*/) {
 				// タブを切り替える
 				SetCurSel(nIndex, true);
-				NMHDR nmhdr = { m_hWnd, GetDlgCtrlID(), TCN_SELCHANGE };
+				NMHDR nmhdr = { m_hWnd, (UINT_PTR)GetDlgCtrlID(), TCN_SELCHANGE };
 				// 親にタブが切り替わったことを通知する
 				::SendMessage(GetParent(), WM_NOTIFY, (WPARAM) GetDlgCtrlID(), (LPARAM) &nmhdr);
 			} else {
@@ -730,7 +761,12 @@ protected:
 		CClientDC	 dc(m_hWnd);
 		CBrush		 hbr;
 
-		hbr.CreateSolidBrush( ::GetSysColor(COLOR_3DDKSHADOW) );
+		COLORREF InsertEdgeColor = CTabSkinDarkTheme::IsDarkMode() ? RGB(0xFF, 0xFF, 0xFF) : ::GetSysColor(COLOR_3DDKSHADOW);
+		CPen penLine;
+		penLine.CreatePen(BS_SOLID, 1, InsertEdgeColor);
+		HPEN hpenOld = dc.SelectPen(penLine);
+
+		hbr.CreateSolidBrush(InsertEdgeColor);
 		dc.SetBrushOrg(pt.x, pt.y);
 		CBrushHandle hbrOld = dc.SelectBrush(hbr);
 
@@ -753,6 +789,7 @@ protected:
 		}
 
 		dc.SelectBrush(hbrOld);
+		dc.SelectPen(hpenOld);
 	}
 
 
@@ -761,7 +798,12 @@ protected:
 		CClientDC	 dc(m_hWnd);
 		CBrush		 hbr;
 
-		hbr.CreateSolidBrush( ::GetSysColor(COLOR_3DDKSHADOW) );
+		COLORREF InsertEdgeColor = CTabSkinDarkTheme::IsDarkMode() ? RGB(0xFF, 0xFF, 0xFF) : ::GetSysColor(COLOR_3DDKSHADOW);
+		CPen penLine;
+		penLine.CreatePen(BS_SOLID, 1, InsertEdgeColor);
+		HPEN hpenOld = dc.SelectPen(penLine);
+
+		hbr.CreateSolidBrush(InsertEdgeColor);
 		dc.SetBrushOrg(rc.left, rc.top);
 		CBrushHandle hbrOld = dc.SelectBrush(hbr);
 
@@ -775,6 +817,7 @@ protected:
 		dc.Polyline( pts, _countof(pts) );
 
 		dc.SelectBrush(hbrOld);
+		dc.SelectPen(hpenOld);
 	}
 
 
@@ -827,7 +870,7 @@ protected:
 			// Drag&Dropの操作をしていなかったのでタブ切り替え
 			if (bLeftButton) {
 				SetCurSel(nIndex, true);
-				NMHDR nmhdr = { m_hWnd, GetDlgCtrlID(), TCN_SELCHANGE };
+				NMHDR nmhdr = { m_hWnd, (UINT_PTR)GetDlgCtrlID(), TCN_SELCHANGE };
 				::SendMessage(GetParent(), WM_NOTIFY, (WPARAM) GetDlgCtrlID(), (LPARAM) &nmhdr);
 			} else {
 				SendMessage( WM_RBUTTONUP, (WPARAM) nFlags, MAKELPARAM(pt.x, pt.y) );

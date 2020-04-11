@@ -121,7 +121,7 @@ PIDLIST_ABSOLUTE GetIDListByIndex(IShellBrowser* pShellBrowser, int nIndex)
 
 	LPITEMIDLIST pidlFolder = ShellWrap::GetCurIDList(pShellBrowser);
 	LPITEMIDLIST pidlSelectedItem = ::ILCombine(pidlFolder, pidlChild);
-	::ILFree(pidlFolder);
+	::CoTaskMemFree(pidlFolder);
 
 	return pidlSelectedItem;
 }
@@ -141,13 +141,13 @@ CString GetInfoTipText(LPCTSTR path)
 				LPWSTR strText;
 				if (SUCCEEDED(spQueryInfo->GetInfoTip(QITIPF_DEFAULT, &strText))) {
 					CString str = strText;
-					CoTaskMemFree((LPVOID)strText);
-					ILFree(pidl);
+					::CoTaskMemFree((LPVOID)strText);
+					::CoTaskMemFree(pidl);
 					return str;
 				}
 			}
 		}
-		ILFree(pidl);
+		::CoTaskMemFree(pidl);
 	}
 	return CString();
 }

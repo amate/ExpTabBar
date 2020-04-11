@@ -247,7 +247,7 @@ private:
 			FORMATETC formatetcs[] = {
 				{ CF_HDROP, 								 NULL,		DVASPECT_CONTENT,	-1,   TYMED_HGLOBAL },
 				{ CF_UNICODETEXT,							 NULL,		DVASPECT_CONTENT,	-1,   TYMED_HGLOBAL },
-				{ ::RegisterClipboardFormat(CFSTR_SHELLURL), NULL,		DVASPECT_CONTENT,	-1,   0 			},
+				{ (CLIPFORMAT)::RegisterClipboardFormat(CFSTR_SHELLURL), NULL,		DVASPECT_CONTENT,	-1,   0 			},
 			};
 			hr = pEnumFormatEtc->Init(formatetcs, formatetcs + _countof(formatetcs), NULL, AtlFlagCopy);
 			hr = pEnumFormatEtc->QueryInterface(IID_IEnumFORMATETC, (void **) ppenumFormatEtc);

@@ -85,6 +85,7 @@ public:
 		CHAIN_MSG_MAP( CThemeImpl<CTabCtrlImpl> )
 		MSG_WM_CREATE			( OnCreate )
 		MSG_WM_DESTROY			( OnDestroy )
+		MSG_WM_SETTINGCHANGE	( OnSettingChange )
 		MSG_WM_WINDOWPOSCHANGING( OnWindowPosChanging )
 		MSG_WM_LBUTTONDOWN		( OnLButtonDown )
 		MSG_WM_LBUTTONUP		( OnLButtonUp )
@@ -98,6 +99,7 @@ public:
 
 	int 	OnCreate(LPCREATESTRUCT lpCreateStruct);
 	void	OnDestroy();
+	void	OnSettingChange(UINT uFlags, LPCTSTR lpszSection);
 	void	OnWindowPosChanging(LPWINDOWPOS lpWndPos);
 	void	OnLButtonDown(UINT nFlags, CPoint point);
 	void	OnLButtonUp(UINT nFlags, CPoint point);
@@ -130,9 +132,9 @@ protected:
 	void	_UpdateMultiLineLayout(int nWidth);
 	void	_UpdateLayout();
 
-	const CRect	_InflateGapWidth(const CRect &rc) const;
+	void	_CorrectTabGroupBorder();
 
-	void	_RefreshItemStrDraw();
+	const CRect	_InflateGapWidth(const CRect &rc) const;
 
 protected:
 
@@ -143,6 +145,8 @@ protected:
 		s_kcxGap		= 2,
 		s_kcyGap		= -2,	// タブの上下間の幅
 		s_kSideMargin	= 2,	// 左右の余白
+		s_kcyTabGroupGap = 5,	// タブグループ間の上下間の幅
+		s_kcyTabGroupBorderWidht = 2,
 		s_kcxSeparator	= 2,
 		s_kcyTabIcon	= 4,	// タブとアイコンの上下の余白
 

@@ -145,7 +145,7 @@ void	CThumbnailTooltip::_StartCreateImageDataThread()
 				CCritSecLock	lock(m_cs);
 				// キャッシュのサイズを超えたので削除
 				if (m_bAddImageCached == false &&
-					m_ImageCache.size() > CThumbnailTooltipConfig::s_nMaxThumbnailCache)
+					static_cast<int>(m_ImageCache.size()) > CThumbnailTooltipConfig::s_nMaxThumbnailCache)
 				{
 					auto& seqList = m_ImageCache.get<seq>();
 					seqList.erase(seqList.begin());

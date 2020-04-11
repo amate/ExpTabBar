@@ -4,6 +4,8 @@
 *.suo
 *.opensdf
 
+.vs/
+/packages/
 _*/
 ipch/
 _ignore*/
@@ -11,4 +13,4 @@ _ignore*/
 *Debug*
 Release*
 
-
+/UIA/obj/

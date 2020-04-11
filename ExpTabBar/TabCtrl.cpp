@@ -202,6 +202,11 @@ CTabSkinTheme::CTabSkinTheme(CTheme& theme)
 }
 
 
+void CTabSkinTheme::DrwaBreakLineBorder(CDCHandle dc, const CRect& rcBorlder)
+{
+	dc.FillSolidRect(rcBorlder, kBreakLineBorder);
+}
+
 void	CTabSkinTheme::_DrawSkinCur(CDCHandle dc, CRect rcItem)
 {
 	rcItem.left -= 2;
@@ -221,6 +226,92 @@ void	CTabSkinTheme::_DrawSkinSel(CDCHandle dc, CRect rcItem)
 	m_Theme.DrawThemeBackground(dc, TABP_TABITEM, TIS_HOT, rcItem);
 }
 
+////////////////////////////////////////////////////////////////////////////
+// CTabSkinDarkTheme
+
+CTabSkinDarkTheme::CTabSkinDarkTheme()
+{
+	m_colText = kText;
+
+	m_penEdge.CreatePen(PS_SOLID, 1, kEdge);
+}
+
+bool CTabSkinDarkTheme::IsDarkMode()
+{
+	CRegKey regkey;
+	LSTATUS ret = regkey.Open(HKEY_CURRENT_USER, LR"(SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize)", KEY_READ);
+	if (ret == ERROR_SUCCESS) {
+		DWORD value = 0;
+		ret = regkey.QueryDWORDValue(L"AppsUseLightTheme", value);
+		if (ret == ERROR_SUCCESS) {
+			bool isDarkMode = !value;
+			return isDarkMode;
+		}
+	}
+	return false;
+}
+
+void CTabSkinDarkTheme::DrawBackground(CDCHandle dc, const CRect& rcClient)
+{
+	dc.FillSolidRect(rcClient, kBG);
+}
+
+void CTabSkinDarkTheme::DrwaBreakLineBorder(CDCHandle dc, const CRect& rcBorlder)
+{
+	dc.FillSolidRect(rcBorlder, kBreakLineBorder);
+}
+
+void	CTabSkinDarkTheme::_DrawSkinCur(CDCHandle dc, CRect rcItem)
+{
+	rcItem.left -= 2;
+	rcItem.right += 2;
+
+	dc.FillSolidRect(rcItem, kSelectedBG);
+
+	POINT linePts[] = {
+		{rcItem.left, rcItem.bottom},
+		{rcItem.left, rcItem.top},
+		{rcItem.right, rcItem.top},
+		{rcItem.right, rcItem.bottom}
+	};
+	HPEN hpenPrev = dc.SelectPen(m_penEdge);
+	dc.Polyline(linePts, _countof(linePts));
+	dc.SelectPen(hpenPrev);
+}
+
+void	CTabSkinDarkTheme::_DrawSkinNone(CDCHandle dc, CRect rcItem)
+{
+	rcItem.top += 2;
+
+	dc.FillSolidRect(rcItem, kNormalBG);
+
+	POINT linePts[] = {
+		{rcItem.left, rcItem.bottom},
+		{rcItem.left, rcItem.top},
+		{rcItem.right, rcItem.top},
+		{rcItem.right, rcItem.bottom}
+	};
+	HPEN hpenPrev = dc.SelectPen(m_penEdge);
+	dc.Polyline(linePts, _countof(linePts));
+	dc.SelectPen(hpenPrev);
+}
+
+void	CTabSkinDarkTheme::_DrawSkinSel(CDCHandle dc, CRect rcItem)
+{
+	rcItem.top += 2;
+
+	dc.FillSolidRect(rcItem, kHotBG);
+
+	POINT linePts[] = {
+	{rcItem.left, rcItem.bottom},
+	{rcItem.left, rcItem.top},
+	{rcItem.right, rcItem.top},
+	{rcItem.right, rcItem.bottom}
+	};
+	HPEN hpenPrev = dc.SelectPen(m_penEdge);
+	dc.Polyline(linePts, _countof(linePts));
+	dc.SelectPen(hpenPrev);
+}
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -564,6 +655,7 @@ bool MtlIsDataAvailable(IDataObject *pDataObject, CLIPFORMAT cfFormat, LPFORMATE
 
 // MtlCom
 ////////////////////////////////
+
 
 
 

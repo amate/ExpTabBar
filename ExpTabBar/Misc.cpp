@@ -307,7 +307,8 @@ void SetForegroundWindow(HWND hWnd)
 	// 最前面アプリケーションの入力処理機構に接続する 
 	AttachThreadInput( ::GetCurrentThreadId(), foregroundID, TRUE); 
 	// 最前面ウィンドウを変更する 
-	::SetForegroundWindow(hWnd);
+	//::SetForegroundWindow(hWnd);
+	::BringWindowToTop(hWnd);
 
 	// 接続を解除する
 	AttachThreadInput( ::GetCurrentThreadId(), foregroundID, FALSE);
