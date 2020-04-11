@@ -1,0 +1,4 @@
+[submodule "minhook"]
+	path = minhook
+	url = git@github.com:TsudaKageyu/minhook.git
+	branch = master
