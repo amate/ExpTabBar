@@ -52,7 +52,7 @@ END_COM_MAP()
 
 
 BEGIN_SINK_MAP(CExpTabBand)
-    SINK_ENTRY_EX(SINKID_EVENTS, DIID_DWebBrowserEvents2, DISPID_TITLECHANGE		, OnTitleChange)
+	SINK_ENTRY_EX(SINKID_EVENTS, DIID_DWebBrowserEvents2, DISPID_TITLECHANGE		, OnTitleChange)
 	SINK_ENTRY_EX(SINKID_EVENTS, DIID_DWebBrowserEvents2, DISPID_NAVIGATECOMPLETE2	, OnNavigateComplete2)
 	SINK_ENTRY_EX(SINKID_EVENTS, DIID_DWebBrowserEvents2, DISPID_DOCUMENTCOMPLETE	, OnDocumentComplete)
 END_SINK_MAP()
@@ -95,6 +95,8 @@ ALT_MSG_MAP(7)	// addressbar progress
 	MSG_WM_PARENTNOTIFY( OnAddressBarProgressParentNotify )
 ALT_MSG_MAP(8)	// addressbar edit
 	MSG_WM_KEYDOWN( OnAddressBarEditKeyDown )
+ALT_MSG_MAP(9)	// ShellTabWindowClass
+	MSG_WM_CHILDACTIVATE(OnChildActivate)
 END_MSG_MAP()
 
 
@@ -118,6 +120,7 @@ public:
 
 
 	// Event sink
+	void __stdcall OnBeforeNavigate2(IDispatch* pDisp, VARIANT* URL, VARIANT* pFrags, VARIANT* pPostData, VARIANT* pHeaders, VARIANT* pCancel);
 	void __stdcall OnNavigateComplete2(IDispatch* pDisp,VARIANT* URL);
 	void __stdcall OnDocumentComplete(IDispatch* pDisp, VARIANT* URL);
     void __stdcall OnTitleChange(BSTR title);
@@ -144,6 +147,8 @@ public:
 	void	OnAddressBarProgressParentNotify(UINT message, UINT nChildID, LPARAM lParam);
 
 	void	OnAddressBarEditKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags);
+
+	void	OnChildActivate();	// トップタブがアクティブになった時
 
 private:
 	int		_HitTestDirectUI(CRect& rcItem);
@@ -180,6 +185,7 @@ private:
 	CContainedWindow	m_wndExplorer;
 	CContainedWindow	m_wndAddressBarProgress;
 	CContainedWindow	m_wndAddressBarEditCtrl;
+	CContainedWindow	m_wndShellTabWindow;
 
 	CListViewCtrl		m_ListView;
 	CToolTipCtrl		m_Tooltip;

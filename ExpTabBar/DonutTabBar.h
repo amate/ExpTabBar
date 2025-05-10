@@ -64,6 +64,7 @@ public:
 	void	RefreshTab(LPCTSTR title);
 	void	NavigateComplete2(LPCTSTR strURL);
 	void	DocumentComplete();
+	void	TopTabActivate();
 
 	// メッセージマップ
 	BEGIN_MSG_MAP_EX( CDonutTabBar )
@@ -141,7 +142,7 @@ private:
 	void	_ClearSearchText();
 	
 	void	_SaveSelectedIndex(int nIndex);
-	void	_RestoreSelectedIndex();
+	bool _RestoreSelectedIndex();
 
 	void	_threadPerformSHFileOperation(LPITEMIDLIST pidlTo, IDataObject*	pDataObject, bool bMove);
 
@@ -153,7 +154,6 @@ private:
 
 	CComPtr<IShellBrowser>	m_spShellBrowser;
 	CComPtr<ITravelLogStg>	m_spTravelLogStg;
-	CComPtr<ISearchBoxInfo>	m_spSearchBoxInfo;
 	CMessageMap*	m_pExpTabBandMessageMap;
 
 	// for DragDrop
@@ -193,7 +193,6 @@ private:
 
 	HWND			m_hSearch;
 
-	CNotifyWindow	m_wndNotify;
 	int				m_nInsertIndex;
 	boost::optional<OpenFolderAndSelectItems> m_folderAndSelectItems;
 
@@ -202,6 +201,8 @@ private:
 	CMutex			m_mutex_currentPIDL;
 
 	UIAWrapper		m_UIAWrapper;
+
+	int	m_restoreSelectedIndexRetryCount = 0;
 };
 
 

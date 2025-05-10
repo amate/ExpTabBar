@@ -18,7 +18,7 @@ namespace {
 
 		CString strExt = Misc::GetPathExtention(path);
 		strExt.MakeLower();
-		if (strExt == _T("jpg") || strExt == _T("jpeg") || strExt == _T("png") || strExt == _T("gif") || strExt == _T("bmp")) {
+		if (strExt == _T("webp") || strExt == _T("jpg") || strExt == _T("jpeg") || strExt == _T("png") || strExt == _T("gif") || strExt == _T("bmp")) {
 			return true;
 		} else {
 			return false;
@@ -36,6 +36,7 @@ CExpTabBand::CExpTabBand() :
 	m_wndExplorer(this, 6),
 	m_wndAddressBarProgress(this, 7),
 	m_wndAddressBarEditCtrl(this, 8),
+	m_wndShellTabWindow(this, 9),
 	m_nIndexTooltip(-1),
 	m_bNowTrackMouseLeave(false),
 	m_bNowTrackMouseHover(false),
@@ -147,13 +148,13 @@ STDMETHODIMP CExpTabBand::ResizeBorderDW(const RECT* /* prcBorder */, IUnknown* 
 
 STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 {
-	//INFO_LOG << L"CExpTabBand::SetSite : punkSite : " << punkSite;
+	INFO_LOG << L"CExpTabBand::SetSite : punkSite : " << punkSite;
 	HRESULT hr;
 	if (punkSite) {
 		//Get the parent window.
 		CComQIPtr<IOleWindow> pOleWindow(punkSite);
 		if (pOleWindow == nullptr) {
-			//ERROR_LOG << L"CExpTabBand::SetSite : pOleWindow faild";
+			INFO_LOG << L"CExpTabBand::SetSite : pOleWindow faild";
 			return E_FAIL;
 		}
 
@@ -222,6 +223,8 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 			}
 		});
 
+		m_wndShellTabWindow.SubclassWindow(CWindow(hWndParent).GetParent().GetParent());
+
 		m_wndExplorer.SubclassWindow(CWindow(hWndParent).GetTopLevelWindow());
 		if (m_wndExplorer == ::GetFocus() || m_wndExplorer.IsChild(::GetFocus()))
 			_RegisterExecuteCommandVerb(false);
@@ -243,6 +246,8 @@ STDMETHODIMP CExpTabBand::SetSite(IUnknown* punkSite)
 		if (m_wndDirectUI)
 			m_wndDirectUI.UnsubclassWindow(TRUE);
 
+		if (m_wndShellTabWindow)
+			m_wndShellTabWindow.UnsubclassWindow(TRUE);
 		if (m_wndExplorer)
 			m_wndExplorer.UnsubclassWindow(TRUE);
 
@@ -271,6 +276,7 @@ STDMETHODIMP CExpTabBand::GetSite(REFIID riid, LPVOID *ppvReturn)
 
 
 // Event sink
+
 
 void CExpTabBand::OnNavigateComplete2(IDispatch* pDisp,VARIANT* URL)
 {
@@ -327,8 +333,8 @@ void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)
 				}
 			}
 		}
-		_SetNoFullRowSelect();
 	}
+	_SetNoFullRowSelect();
 }
 
 
@@ -679,6 +685,8 @@ void CExpTabBand::OnParentNotify(UINT message, UINT nChildID, LPARAM lParam)
 void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 {
 	if (::GetKeyState(VK_CONTROL) < 0) {
+		_SetNoFullRowSelect();
+#if 0
 		std::vector<CString> vec;
 		CComPtr<IShellView>	spShellView;
 		m_spShellBrowser->QueryActiveShellView(&spShellView);
@@ -692,14 +700,10 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 				spFolderView->Item(i, &pidlChild);
 				LPITEMIDLIST pidl = ::ILCombine(pidlFolder, pidlChild);
 				CString strPath = ShellWrap::GetFullPathFromIDList(pidl);
-				if (::PathIsDirectory(strPath) == FALSE) {
-					CString strExt = Misc::GetPathExtention(strPath);
-					strExt.MakeLower();
-					if (strExt == _T("jpg") || strExt == _T("jpeg") || strExt == _T("png") || strExt == _T("gif") || strExt == _T("bmp"))
-					{
-						vec.push_back(strPath);
-					}
+				if (IsImageFile(strPath)) {
+					vec.push_back(strPath);
 				}
+
 				::CoTaskMemFree(pidl);
 				::CoTaskMemFree(pidlChild);
 			}
@@ -715,8 +719,10 @@ void	CExpTabBand::OnTabBarLButtonDblClk(UINT nFlags, CPoint point)
 			//});
 			//td.detach();
 		}
+#endif
 	} else if(::GetKeyState(VK_SHIFT) < 0) {
 		m_ThumbnailTooltip.ClearImageCache();
+		m_wndTabBar.MessageBox(L"サムネイルキャッシュをクリアしました。", L"確認", MB_OK);
 	}
 }
 
@@ -792,6 +798,11 @@ void	CExpTabBand::OnAddressBarEditKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 		}
 	}
 	m_wndAddressBarEditCtrl.DefWindowProc();
+}
+
+void	CExpTabBand::OnChildActivate()
+{
+	m_wndTabBar.TopTabActivate();
 }
 
 // private:
@@ -938,6 +949,7 @@ bool	CExpTabBand::_ShowThumbnailTooltip(int nIndex, CRect rcItem, bool bForceSho
 
 	// Altキーを押しているときだけサムネイルを表示する
 	if (bForceShow == false && CThumbnailTooltipConfig::s_bShowThumbnailOnAlt && (GetKeyState(VK_MENU) < 0) == false) {
+		::CoTaskMemFree(pidl);
 		return false;
 	}
 
@@ -1094,7 +1106,7 @@ bool	CExpTabBand::_SubclassAddressBarProgress()
 		return NULL;
 	};
 	HWND hWndProgress = funcFindWindow(m_wndExplorer, 0);
-	ATLASSERT( hWndProgress );
+	//ATLASSERT( hWndProgress );
 	if (hWndProgress) {
 		m_wndAddressBarProgress.SubclassWindow(hWndProgress);
 		return true;

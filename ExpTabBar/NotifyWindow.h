@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 // Forward Declare
 class CDonutTabBar;
 
@@ -14,8 +16,16 @@ class CNotifyWindow : public CFrameWindowImpl<CNotifyWindow>
 public:
 	DECLARE_FRAME_WND_CLASS(_T("ExpTabBar_NotifyWindow"), NULL)
 
-	// Constructor
-	CNotifyWindow(CDonutTabBar* p);
+	static CNotifyWindow& GetInstance();
+
+	void	AddTabBar(CDonutTabBar* tabBar);
+	void	RemoveTabBar(CDonutTabBar* tabBar);
+
+	void	ActiveTabBar(CDonutTabBar* tabBar);
+
+	std::size_t	GetTabBarCount() const {
+		return m_tabBarList.size();
+	}
 
 	BEGIN_MSG_MAP_EX(CNotifyWindow)
 		MSG_WM_CREATE(OnCreate)
@@ -31,7 +41,11 @@ public:
 	LRESULT OnIsMargeControlPanel(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 private:
+	// Constructor
+	CNotifyWindow();
+
 	CDonutTabBar* m_pTabBar;
+	std::vector<CDonutTabBar*>	m_tabBarList;
 
 	HANDLE	m_hEventAPIHookTrapper;
 	HANDLE	m_hEventAPIHookTrapper64;

@@ -1,0 +1,9 @@
+{
+    "name": "apihook",
+    "version-string": "1.0.0",
+    "dependencies": [
+        "boost-serialization",
+        "boost-log",
+        "boost-format"
+    ]
+}

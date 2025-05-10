@@ -3,15 +3,64 @@
 #include "DonutTabBar.h"
 #include "ShellWrap.h"
 #include "ExpTabBarOption.h"
-
+#include "Logger.h"
 
 ////////////////////////////////////////////////////////////
 // CNotifyWindow
 
+CNotifyWindow& CNotifyWindow::GetInstance()
+{
+	static CNotifyWindow s_instance;
+	return s_instance;
+}
+
+void CNotifyWindow::AddTabBar(CDonutTabBar* tabBar)
+{
+	ATLASSERT(tabBar);
+	INFO_LOG << L"AddTabBar: " << tabBar;
+
+	m_tabBarList.push_back(tabBar);
+	if (m_tabBarList.size() == 1) {
+		m_pTabBar = tabBar;
+	}
+}
+
+void CNotifyWindow::RemoveTabBar(CDonutTabBar* tabBar)
+{
+	ATLASSERT(tabBar);
+	INFO_LOG << L"RemoveTabBar: " << tabBar;
+
+	for (auto it = m_tabBarList.begin(); it < m_tabBarList.end(); ++it) {
+		if (*it == tabBar) {
+			if (m_pTabBar == tabBar) {
+				m_pTabBar = nullptr;
+			}
+			m_tabBarList.erase(it);
+
+			if (m_tabBarList.empty()) {
+				if (IsWindow()) {
+					DestroyWindow();
+				}
+			}
+
+			return;
+		}
+	}
+	ATLASSERT(FALSE);
+}
+
+void CNotifyWindow::ActiveTabBar(CDonutTabBar* tabBar)
+{
+	ATLASSERT(tabBar);
+	INFO_LOG << L"ActiveTabBar: " << tabBar;
+	m_pTabBar = tabBar;
+}
+
 // Constructor
-CNotifyWindow::CNotifyWindow(CDonutTabBar* p)
-	: m_pTabBar(p), m_hEventAPIHookTrapper(NULL), m_hEventAPIHookTrapper64(NULL), m_hJob(NULL)
-{	}
+CNotifyWindow::CNotifyWindow()
+	: m_bMsgHandled(FALSE), m_pTabBar(nullptr), m_hEventAPIHookTrapper(NULL), m_hEventAPIHookTrapper64(NULL), m_hJob(NULL)
+{
+}
 
 int CNotifyWindow::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
@@ -81,6 +130,12 @@ BOOL CNotifyWindow::OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct)
 #if 0
 	LPCTSTR strFullPath = (LPCTSTR)pCopyDataStruct->lpData;
 #endif
+	if (!m_pTabBar) {
+		ERROR_LOG << L"CNotifyWindow::OnCopyData: m_pTabBar is nullptr";
+		//ATLASSERT(FALSE);
+		return FALSE;
+	}
+
 	if (pCopyDataStruct->dwData == 0) {
 		LPITEMIDLIST pidl = (LPITEMIDLIST)pCopyDataStruct->lpData;
 		if (pidl == NULL)

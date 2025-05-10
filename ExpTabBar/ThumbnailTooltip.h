@@ -116,7 +116,7 @@ public:
 
 private:
 	CRect	_CalcTooltipRect(const CRect& rcItem, const ImageData& ImageData);
-	CSize	_CalcActualSize(Gdiplus::Image* image);
+	CSize	_CalcActualSize(int width, int height);
 	CSize	_CalcInfoTipTextSize(const ImageData& ImageData);
 	void	_StartCreateImageDataThread();
 	std::unique_ptr<ImageData>	_CreateImageData(LPCTSTR strPath);

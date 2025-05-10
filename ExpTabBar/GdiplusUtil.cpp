@@ -27,11 +27,20 @@ public:
 		GdiplusStartupInput	gdiplusStartupInput;
 		GdiplusStartup(&m_token, &gdiplusStartupInput, NULL);
 
-		UINT	size;
-		GetImageEncodersSize(&m_nEncoders, &size);
-		m_pImageCodecInfo = (Gdiplus::ImageCodecInfo*)(malloc(size));
-		GetImageEncoders(m_nEncoders, size, m_pImageCodecInfo);
+		{
+			UINT	size;
+			GetImageEncodersSize(&m_nEncoders, &size);
+			m_pImageCodecInfo = (Gdiplus::ImageCodecInfo*)(malloc(size));
+			GetImageEncoders(m_nEncoders, size, m_pImageCodecInfo);
+		}
+		{
+			UINT	size;
+			GetImageDecodersSize(&m_nDecoders, &size);
+			m_pImageDecodeCodecInfo = (Gdiplus::ImageCodecInfo*)(malloc(size));
+			GetImageDecoders(m_nDecoders, size, m_pImageDecodeCodecInfo);
+		}
 	}
+
 	void	Term()
 	{
 		if (m_pImageCodecInfo) {
@@ -63,8 +72,9 @@ public:
 private:
 	ULONG_PTR	m_token;
 	UINT		m_nEncoders;
+	UINT		m_nDecoders;
 	ImageCodecInfo* m_pImageCodecInfo;
-
+	ImageCodecInfo* m_pImageDecodeCodecInfo;
 	
 };
 

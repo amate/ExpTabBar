@@ -212,6 +212,13 @@ void	CTabSkinTheme::_DrawSkinCur(CDCHandle dc, CRect rcItem)
 	rcItem.left -= 2;
 	rcItem.right+= 2;
 	m_Theme.DrawThemeBackground(dc, TABP_TABITEM, TIS_SELECTED, rcItem);
+
+
+	CRect rc = rcItem;
+	rc.top += 1;
+	rc.left += 1;
+	rc.right -= 1;
+	dc.FillSolidRect(rc, RGB(0xa0,0xd8,0xef));
 }
 
 void	CTabSkinTheme::_DrawSkinNone(CDCHandle dc, CRect rcItem)

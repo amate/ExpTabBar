@@ -1,4 +1,4 @@
-﻿# gitで無視するファイル/フォルダ
+# gitで無視するファイル/フォルダ
 *.ncb
 *.sdf
 *.suo
@@ -14,3 +14,4 @@ _ignore*/
 Release*
 
 /UIA/obj/
+vcpkg_installed

@@ -11,7 +11,8 @@ namespace UIA
     {
         static void Main(string[] args)
         {
-            GetScrollPos((IntPtr)0x002206D2);
+            //GetScrollPos((IntPtr)0x002206D2);
+            SetScrollPos((IntPtr)0x02010FEC, 6000);
         }
 
         [DllExport]
@@ -23,6 +24,10 @@ namespace UIA
                 var listViewElm = AutomationElement.FromHandle(hwndListView);
                 var condScrollbarCtrl = new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ScrollBar);
                 scrollbarElm = listViewElm.FindFirst(TreeScope.Children, condScrollbarCtrl);
+                if (scrollbarElm == null)
+                {
+                    return 0;
+                }
                 var rangeValuePattern = (RangeValuePattern)scrollbarElm.GetCurrentPattern(RangeValuePattern.Pattern);
                 //Console.WriteLine("Hello World! {0}", rangeValuePattern.Current.Value);
                 //rangeValuePattern.SetValue(50000);
@@ -44,7 +49,7 @@ namespace UIA
         }
 
         [DllExport]
-        public static void SetScrollPos(IntPtr hwndListView, int scrollPos)
+        public static bool SetScrollPos(IntPtr hwndListView, int scrollPos)
         {
             AutomationElement scrollbarElm = null;
             try
@@ -52,20 +57,25 @@ namespace UIA
                 var listViewElm = AutomationElement.FromHandle(hwndListView);
                 var condScrollbarCtrl = new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ScrollBar);
                 scrollbarElm = listViewElm.FindFirst(TreeScope.Children, condScrollbarCtrl);
+                if (scrollbarElm == null)
+                {
+                    return false;
+                }
                 var rangeValuePattern = (RangeValuePattern)scrollbarElm.GetCurrentPattern(RangeValuePattern.Pattern);
                 rangeValuePattern.SetValue(scrollPos);
+                return true;
             }
             catch(Exception )
             {
                 try
                 {
-                    var valuePattern = (ValuePattern)scrollbarElm.GetCurrentPattern(ValuePattern.Pattern);
-                    valuePattern.SetValue(scrollPos.ToString());
+                    //var valuePattern = (ValuePattern)scrollbarElm.GetCurrentPattern(ValuePattern.Pattern);
+                    //valuePattern.SetValue(scrollPos.ToString());
                 }
                 catch (Exception)
                 {
                 }
-                return;
+                return false;
             }
         }
 

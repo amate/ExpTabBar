@@ -5,11 +5,14 @@
 
 #include "stdafx.h"
 #include "ThumbnailTooltip.h"
+#include <fstream>
+#include <webp/decode.h>
 #include "GdiplusUtil.h"
 #include "ShellWrap.h"
 #include "ExpTabBarOption.h"
 #include "Misc.h"
 #include "Logger.h"
+#include "CodeConvert.h"
 
 using namespace Gdiplus;
 
@@ -23,6 +26,26 @@ enum {
 	kTooltipTopItemMargin = 4,
 };
 
+
+namespace {
+
+	std::string	LoadFile(const std::wstring& filePath)
+	{
+		std::ifstream fs(filePath, std::ios::in | std::ios::binary);
+		if (!fs)
+			return "";
+
+		fs.seekg(0, std::ios::end);
+		std::string buff;
+		auto fileSize = fs.tellg();
+		buff.resize(fileSize);
+		fs.seekg(std::ios::beg);
+		fs.clear();
+		fs.read(const_cast<char*>(buff.data()), fileSize);
+		return buff;
+	}
+
+}
 
 //////////////////////////////////////////////////////////////////////
 // CThumbnailTooltip
@@ -341,11 +364,11 @@ CRect	CThumbnailTooltip::_CalcTooltipRect(const CRect& rcItem, const ImageData& 
 }
 
 /// 最大サイズに収まるように画像の比率を考えて縮小する
-CSize	CThumbnailTooltip::_CalcActualSize(Gdiplus::Image* image)
+CSize	CThumbnailTooltip::_CalcActualSize(int width, int height)
 {
 	CSize ActualSize;
-	int nImageWidth = image->GetWidth();
-	int nImageHeight = image->GetHeight();
+	int nImageWidth = width;	// image->GetWidth();
+	int nImageHeight = height;	// image->GetHeight();
 	const int kMaxImageWidth = CThumbnailTooltipConfig::s_MaxThumbnailSize.cx;
 	const int kMaxImageHeight = CThumbnailTooltipConfig::s_MaxThumbnailSize.cy;
 	if (nImageWidth > kMaxImageWidth || nImageHeight > kMaxImageHeight) {
@@ -392,9 +415,68 @@ std::unique_ptr<CThumbnailTooltip::ImageData>	CThumbnailTooltip::_CreateImageDat
 {
 	std::unique_ptr<ImageData>	pdata(new ImageData);
 	ImageData&	imgdata = *pdata;
-	std::unique_ptr<Gdiplus::Image> bmpRaw(Gdiplus::Bitmap::FromFile(strPath));
+
+	std::unique_ptr<Gdiplus::Image> bmpRaw;
+
+	if (Misc::GetPathExtention(strPath).CompareNoCase(_T("webp")) == 0) {
+		try {
+			std::string imageData = LoadFile(strPath);
+			if (imageData.size() == 0) {
+				throw std::runtime_error("LoadFile failed");
+			}
+
+			// A) Init a configuration object
+			WebPDecoderConfig config = {};
+			if (!WebPInitDecoderConfig(&config)) {
+				throw std::runtime_error("WebPInitDecoderConfig failed");
+			}
+
+			// B) optional: retrieve the bitstream's features.
+			if (WebPGetFeatures(reinterpret_cast<const uint8_t*>(imageData.c_str()), imageData.size(), &config.input) != VP8_STATUS_OK) {
+				throw std::runtime_error("WebPGetFeatures failed");
+			}
+
+			auto bitmap = std::make_unique<Gdiplus::Bitmap>(config.input.width, config.input.height, PixelFormat32bppARGB);
+			Gdiplus::Rect	rc(0, 0, config.input.width, config.input.height);
+			Gdiplus::BitmapData	bmpData = {};
+			bitmap->LockBits(&rc, Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bmpData);
+
+			// C) Adjust 'config', if needed
+			config.output.colorspace = MODE_BGRA;
+			config.output.is_external_memory = true;
+			config.output.u.RGBA.rgba = static_cast<uint8_t*>(bmpData.Scan0);
+			config.output.u.RGBA.stride = bmpData.Stride;
+			config.output.u.RGBA.size = static_cast<size_t>(bmpData.Stride * bmpData.Height);
+			// etc.
+
+			// Note that you can also make config.output point to an externally
+			// supplied memory buffer, provided it's big enough to store the decoded
+			// picture. Otherwise, config.output will just be used to allocate memory
+			// and store the decoded picture.
+
+			// D) Decode!
+			if (WebPDecode(reinterpret_cast<const uint8_t*>(imageData.c_str()), imageData.size(), &config) != VP8_STATUS_OK) {
+				bitmap->UnlockBits(&bmpData);
+				throw std::runtime_error("WebPDecode failed");
+			}
+			bitmap->UnlockBits(&bmpData);
+			// E) Decoded image is now in config.output (and config.output.u.RGBA)
+
+			bmpRaw = std::move(bitmap);
+		}
+		catch (std::exception& e) {
+			ERROR_LOG << L"_CreateImageData webp load failed: " << CodeConvert::UTF16fromUTF8(e.what());
+			ATLASSERT(FALSE);
+			return pdata;
+		}
+
+	} else {
+		// other image types
+		bmpRaw.reset(Gdiplus::Bitmap::FromFile(strPath));
+	}
+
 	if (bmpRaw) {
-		imgdata.ActualSize = _CalcActualSize(bmpRaw.get());
+		imgdata.ActualSize = _CalcActualSize(bmpRaw->GetWidth(), bmpRaw->GetHeight());
 
 		/* サムネイル作成 */
 		Gdiplus::Graphics	graphics(m_hWnd);
@@ -408,7 +490,8 @@ std::unique_ptr<CThumbnailTooltip::ImageData>	CThumbnailTooltip::_CreateImageDat
 				imgdata.vecGifImage.reserve(FrameCount);
 
 				UINT	propItemSize = bmpRaw->GetPropertyItemSize(PropertyTagFrameDelay);
-				PropertyItem*	propItems = (PropertyItem*)new BYTE[propItemSize];
+				auto propItemData = std::make_unique<BYTE[]>(propItemSize);
+				Gdiplus::PropertyItem*	propItems = (Gdiplus::PropertyItem*)propItemData.get();
 				bmpRaw->GetPropertyItem(PropertyTagFrameDelay, propItemSize, propItems);
 				for (UINT i = 0; i < FrameCount; ++i) {
 					int nDelay = ((long*)propItems->value)[i] * 10;
@@ -423,7 +506,6 @@ std::unique_ptr<CThumbnailTooltip::ImageData>	CThumbnailTooltip::_CreateImageDat
 					graphicsTarget.DrawImage(bmpRaw.get(), 0, 0, imgdata.ActualSize.cx, imgdata.ActualSize.cy);
 					imgdata.vecGifImage.push_back(imgPage);
 				}
-				delete[] (BYTE*)propItems;
 				//imgdata.thumbnail	= bmpRaw->Clone();
 			}
 		}
