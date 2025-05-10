@@ -16,6 +16,10 @@ class CNotifyWindow : public CFrameWindowImpl<CNotifyWindow>
 public:
 	DECLARE_FRAME_WND_CLASS(_T("ExpTabBar_NotifyWindow"), NULL)
 
+	enum { 
+		kFindNextTopActiveTabTimerId = 1, 
+	};
+
 	static CNotifyWindow& GetInstance();
 
 	void	AddTabBar(CDonutTabBar* tabBar);
@@ -31,6 +35,7 @@ public:
 		MSG_WM_CREATE(OnCreate)
 		MSG_WM_DESTROY(OnDestroy)
 		MSG_WM_COPYDATA(OnCopyData)
+		MSG_WM_TIMER(OnTimer)
 		MESSAGE_HANDLER_EX(WM_ISMARGECONTROLPANEL, OnIsMargeControlPanel)
 		//CHAIN_MSG_MAP( CFrameWindowImpl<CNotifyWindow> )
 		END_MSG_MAP()
@@ -38,6 +43,7 @@ public:
 	int OnCreate(LPCREATESTRUCT lpCreateStruct);
 	void OnDestroy();
 	BOOL OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct);
+	void OnTimer(UINT_PTR nIDEvent);
 	LRESULT OnIsMargeControlPanel(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 private:

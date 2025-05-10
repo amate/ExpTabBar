@@ -285,7 +285,6 @@ void CExpTabBand::OnNavigateComplete2(IDispatch* pDisp,VARIANT* URL)
 	CString strURL(*URL);
 	ATLTRACE(_T(" URL : %s\n"), strURL);
 	m_wndTabBar.NavigateComplete2(strURL);
-
 }
 
 void CExpTabBand::OnDocumentComplete(IDispatch* pDisp, VARIANT* URL)

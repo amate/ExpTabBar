@@ -41,19 +41,36 @@ void CNotifyWindow::RemoveTabBar(CDonutTabBar* tabBar)
 				if (IsWindow()) {
 					DestroyWindow();
 				}
+			} else {
+				// 次のトップアクティブタブを調べる
+				if (m_tabBarList.size() >= 1) {
+					ActiveTabBar(m_tabBarList.front());	// 暫定
+					SetTimer(kFindNextTopActiveTabTimerId, 1);
+				}
 			}
 
 			return;
 		}
 	}
+
 	ATLASSERT(FALSE);
 }
 
 void CNotifyWindow::ActiveTabBar(CDonutTabBar* tabBar)
 {
 	ATLASSERT(tabBar);
-	INFO_LOG << L"ActiveTabBar: " << tabBar;
+	std::wstring curSelName;
+
+	const int curIndex = tabBar->GetCurSel();
+	if (curIndex != -1) {
+		curSelName = tabBar->GetItemText(curIndex);
+	} else {
+		ATLASSERT(FALSE);
+	}
+
+	INFO_LOG << L"ActiveTabBar: " << tabBar << L" [" << curSelName << L"]";
 	m_pTabBar = tabBar;
+
 }
 
 // Constructor
@@ -193,6 +210,34 @@ BOOL CNotifyWindow::OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct)
 		m_pTabBar->ExternalOpen(::ILClone((LPCITEMIDLIST)folderAndSelectItems.pidlFolder.data()), folderAndSelectItems);
 	}
 	return TRUE;
+}
+
+void CNotifyWindow::OnTimer(UINT_PTR nIDEvent)
+{
+	if (nIDEvent == kFindNextTopActiveTabTimerId) {
+		KillTimer(kFindNextTopActiveTabTimerId);
+
+		if (m_tabBarList.size() >= 1) {
+			CWindow scaffoldingWindow = CWindow(m_tabBarList.front()->m_hWnd).GetTopLevelWindow().GetWindow(GW_CHILD);
+
+			CString className;
+			GetClassName(scaffoldingWindow, className.GetBuffer(128), 128);
+			className.ReleaseBuffer();
+			ATLASSERT(className == L"TITLE_BAR_SCAFFOLDING_WINDOW_CLASS");
+
+			CWindow topActiveShellWindow = scaffoldingWindow.GetWindow(GW_HWNDNEXT);
+
+			for (auto tabBar : m_tabBarList) {
+				CWindow shellTabWindow = CWindow(tabBar->m_hWnd).GetParent().GetParent().GetParent();
+				if (shellTabWindow == topActiveShellWindow) {
+					// active
+					ActiveTabBar(tabBar);
+					break;
+				}
+			}
+			ATLASSERT(m_pTabBar);
+		}
+	}
 }
 
 LRESULT CNotifyWindow::OnIsMargeControlPanel(UINT uMsg, WPARAM wParam, LPARAM lParam)

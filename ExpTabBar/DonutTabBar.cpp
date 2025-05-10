@@ -74,7 +74,6 @@ CDonutTabBar::CDonutTabBar()
 {
 	m_vecHistoryItem.reserve(20);
 
-	m_mutex_currentPIDL.CreateMutex(L"kCurrentPIDLMutexName");
 }
 
 CDonutTabBar::~CDonutTabBar()
@@ -1127,14 +1126,6 @@ void	CDonutTabBar::OnSetCurSel(int nIndex, int nOldIndex)
 			
 			m_spShellBrowser->BrowseObject(pidl, SBSP_NOAUTOSELECT | SBSP_CREATENOHISTORY);
 
-			{
-				CMutexLock lock(m_mutex_currentPIDL);
-				m_currentPIDL.CloseHandle();
-
-				UINT ilSize = ::ILGetSize(pidl);
-				void* view = m_currentPIDL.CreateSharedMemory(kCurrentPIDLSharedName, (DWORD)ilSize);
-				::memcpy_s(view, ilSize, (void*)pidl, ilSize);
-			}
 
 #if 0
 			try {
@@ -1656,14 +1647,6 @@ REFRESH:
 	/* アイテムＩＤリストを変更 */
 	SetItemIDList(nCurIndex, pidl);
 
-	{
-		CMutexLock lock(m_mutex_currentPIDL);
-		m_currentPIDL.CloseHandle();
-
-		UINT ilSize = ::ILGetSize(pidl);
-		void* view = m_currentPIDL.CreateSharedMemory(kCurrentPIDLSharedName, (DWORD)ilSize);
-		::memcpy_s(view, ilSize, (void*)pidl, ilSize);
-	}
 }
 
 

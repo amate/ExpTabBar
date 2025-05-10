@@ -120,7 +120,6 @@ public:
 
 
 	// Event sink
-	void __stdcall OnBeforeNavigate2(IDispatch* pDisp, VARIANT* URL, VARIANT* pFrags, VARIANT* pPostData, VARIANT* pHeaders, VARIANT* pCancel);
 	void __stdcall OnNavigateComplete2(IDispatch* pDisp,VARIANT* URL);
 	void __stdcall OnDocumentComplete(IDispatch* pDisp, VARIANT* URL);
     void __stdcall OnTitleChange(BSTR title);

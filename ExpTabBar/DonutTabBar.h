@@ -24,9 +24,6 @@ public:
 		RestoreScrollPosTimerID = 2,
 	};
 
-	LPCWSTR kCurrentPIDLMutexName = L"ExpTabBar_CurrentPIDLMutex";
-	LPCWSTR kCurrentPIDLSharedName = L"ExpTabBar_CurrentPIDL";
-
 	// コンストラクタ
 	CDonutTabBar();
 	~CDonutTabBar();
@@ -195,10 +192,6 @@ private:
 
 	int				m_nInsertIndex;
 	boost::optional<OpenFolderAndSelectItems> m_folderAndSelectItems;
-
-
-	CSharedMemory	m_currentPIDL;
-	CMutex			m_mutex_currentPIDL;
 
 	UIAWrapper		m_UIAWrapper;
 
